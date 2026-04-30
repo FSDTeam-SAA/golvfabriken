@@ -1,0 +1,36 @@
+{
+  "name": "golvfabriken-cms",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A Strapi application",
+  "scripts": {
+    "develop": "strapi develop",
+    "start": "strapi start",
+    "build": "strapi build",
+    "strapi": "strapi",
+    "deploy": "strapi deploy"
+  },
+  "dependencies": {
+    "@strapi/plugin-cloud": "4.26.1",
+    "@strapi/plugin-i18n": "4.26.1",
+    "@strapi/plugin-seo": "^1.9.9",
+    "@strapi/plugin-users-permissions": "4.26.1",
+    "@strapi/strapi": "4.26.1",
+    "pg": "8.8.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-router-dom": "5.3.4",
+    "styled-components": "5.3.3"
+  },
+  "author": {
+    "name": "A Strapi developer"
+  },
+  "strapi": {
+    "uuid": "798df51b-0b75-4bab-94c3-bb503229b7c0"
+  },
+  "engines": {
+    "node": ">=18.0.0 <=20.x.x",
+    "npm": ">=6.0.0"
+  },
+  "license": "MIT"
+}
