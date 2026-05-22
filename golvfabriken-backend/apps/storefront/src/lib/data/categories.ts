@@ -1,49 +1,35 @@
-import { sdk } from "@lib/config"
+import { sdk } from "@/lib/utils/sdk"
 import { HttpTypes } from "@medusajs/types"
-import { getCacheOptions } from "./cookies"
 
-export const listCategories = async (query?: Record<string, unknown>) => {
-  const next = {
-    ...(await getCacheOptions("categories")),
-  }
+export const listCategories = async (options?: {
+  fields?: string;
+  queryParams?: HttpTypes.StoreProductCategoryListParams;
+}): Promise<HttpTypes.StoreProductCategory[]> => {
+  const { product_categories } = await sdk.store.category.list({
+    fields: options?.fields,
+    ...options?.queryParams,
+  })
 
-  const limit = query?.limit || 100
-
-  return sdk.client
-    .fetch<{ product_categories: HttpTypes.StoreProductCategory[] }>(
-      "/store/product-categories",
-      {
-        query: {
-          fields:
-            "*category_children, *products, *parent_category, *parent_category.parent_category",
-          limit,
-          ...query,
-        },
-        next,
-        cache: "force-cache",
-      }
-    )
-    .then(({ product_categories }) => product_categories)
+  return product_categories
 }
 
-export const getCategoryByHandle = async (categoryHandle: string[]) => {
-  const handle = `${categoryHandle.join("/")}`
+export const retrieveCategory = async ({
+  handle,
+  fields,
+}: {
+  handle: string;
+  fields?: string;
+}): Promise<HttpTypes.StoreProductCategory | null> => {
+  const product_categories = await listCategories({
+    queryParams: {
+      handle,
+      fields
+    },
+  })
 
-  const next = {
-    ...(await getCacheOptions("categories")),
+  if (!product_categories.length) {
+    throw new Error(`Category with handle ${handle} not found`)
   }
 
-  return sdk.client
-    .fetch<HttpTypes.StoreProductCategoryListResponse>(
-      `/store/product-categories`,
-      {
-        query: {
-          fields: "*category_children, *products",
-          handle,
-        },
-        next,
-        cache: "force-cache",
-      }
-    )
-    .then(({ product_categories }) => product_categories[0])
+  return product_categories[0]
 }

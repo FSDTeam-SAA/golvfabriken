@@ -1,0 +1,145 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Roboto+Mono:wght@400;500&display=swap");
+@import "tailwindcss";
+@config "../../tailwind.config.js";
+@import "./theme.css";
+
+@layer base {
+  :root {
+    @apply bg-golvfabriken-beige-50 text-golvfabriken-graphite antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  
+  /* Typography base */
+  h1 {
+    @apply text-h1 text-golvfabriken-graphite;
+  }
+  
+  h2 {
+    @apply text-h2 text-golvfabriken-graphite;
+  }
+  
+  h3 {
+    @apply text-h3 text-golvfabriken-graphite;
+  }
+  
+  h4 {
+    @apply text-h4 text-golvfabriken-graphite;
+  }
+  
+  p {
+    @apply text-body text-golvfabriken-graphite;
+  }
+}
+
+@layer components {
+  /* Content container */
+  .content-container {
+    @apply max-w-[1440px] w-full mx-auto px-6;
+  }
+  
+  /* Golvfabriken buttons */
+  .btn {
+    @apply inline-flex items-center justify-center px-6 py-3 rounded-gf font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-6 py-3 rounded-gf font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-golvfabriken-green text-white hover:bg-golvfabriken-green-dark active:bg-golvfabriken-green-dark shadow-gf-sm hover:shadow-gf;
+  }
+  
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-6 py-3 rounded-gf font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-white text-golvfabriken-graphite border-2 border-golvfabriken-graphite hover:bg-golvfabriken-beige-100 active:bg-golvfabriken-beige-200;
+  }
+  
+  .btn-tertiary {
+    @apply inline-flex items-center font-medium text-golvfabriken-green hover:text-golvfabriken-green-dark underline underline-offset-4 transition-colors;
+  }
+  
+  .btn-campaign {
+    @apply inline-flex items-center justify-center px-6 py-3 rounded-gf font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-golvfabriken-terracotta text-white hover:bg-golvfabriken-terracotta-light shadow-gf hover:shadow-gf-lg;
+  }
+  
+  /* Golvfabriken cards */
+  .card-gf {
+    @apply bg-white rounded-gf shadow-gf-sm hover:shadow-gf transition-shadow duration-200;
+  }
+  
+  /* Product badges */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded text-caption font-semibold uppercase tracking-wide;
+  }
+  
+  .badge-sale {
+    @apply inline-flex items-center px-2.5 py-1 rounded text-caption font-semibold uppercase tracking-wide bg-golvfabriken-terracotta text-white;
+  }
+  
+  .badge-new {
+    @apply inline-flex items-center px-2.5 py-1 rounded text-caption font-semibold uppercase tracking-wide bg-golvfabriken-green text-white;
+  }
+  
+  .badge-bestseller {
+    @apply inline-flex items-center px-2.5 py-1 rounded text-caption font-semibold uppercase tracking-wide bg-golvfabriken-wood text-white;
+  }
+}
+
+@layer utilities {
+  /* Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  input:not([type="checkbox"]):focus ~ label,
+  input:not([type="checkbox"]):not(:placeholder-shown) ~ label {
+    @apply -translate-y-2 text-xs font-medium;
+  }
+
+  input:not([type="checkbox"]):focus ~ label {
+    @apply left-0;
+  }
+
+  /* input:not([type="checkbox"]):-webkit-autofill,
+  input:not([type="checkbox"]):-webkit-autofill:hover,
+  input:not([type="checkbox"]):-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus,
+  select:-webkit-autofill,
+  select:-webkit-autofill:hover,
+  select:-webkit-autofill:focus {
+    border: 1px solid #212121;
+    -webkit-text-fill-color: #212121;
+    -webkit-box-shadow: 0 0 0px 1000px #fff inset;
+    transition: background-color 5000s ease-in-out 0s;
+  } */
+}
+
+/* Navigation menu dropdown animations */
+@keyframes dropdown-open {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes dropdown-close {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-1rem);
+  }
+}

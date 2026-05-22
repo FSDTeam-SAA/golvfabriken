@@ -1,0 +1,49 @@
+import { ComparisonPrice } from "@/components/comparison-price"
+import { Loading } from "@/components/ui/loading"
+import { Price, PriceProps } from "@/components/ui/price"
+import { getProductComparisonPrice } from "@/lib/utils/comparison-price"
+import { getProductPrice } from "@/lib/utils/price"
+import { HttpTypes } from "@medusajs/types"
+
+export default function ProductPrice({
+  product,
+  variant,
+  className,
+  priceProps,
+}: {
+  product: HttpTypes.StoreProduct
+  variant?: HttpTypes.StoreProductVariant
+  className?: string
+  priceProps?: Partial<PriceProps>
+}) {
+  const { cheapestPrice, variantPrice } = getProductPrice({
+    product,
+    variant_id: variant?.id,
+  })
+
+  const selectedPrice = variant ? variantPrice : cheapestPrice
+
+  if (!selectedPrice) {
+    return <Loading rows={1} />
+  }
+
+  // Get comparison price (price per m²)
+  const comparisonPrice = getProductComparisonPrice(product, variant)
+
+  return (
+    <div className="flex flex-col gap-1">
+      <Price
+        price={selectedPrice.calculated_price}
+        currencyCode={selectedPrice.currency_code}
+        type={variant ? "default" : "range"}
+        className={className}
+        originalPrice={selectedPrice.price_type === "sale" ? {
+          price: selectedPrice.original_price,
+          percentage: selectedPrice.percentage_diff,
+        } : undefined}
+        {...priceProps}
+      />
+      <ComparisonPrice comparisonPrice={comparisonPrice} />
+    </div>
+  )
+}

@@ -1,37 +1,18 @@
 {
   "compilerOptions": {
-    "target": "es5",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
     "strict": true,
-    "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
     "esModuleInterop": true,
+    "jsx": "react-jsx",
     "module": "esnext",
-    "moduleResolution": "node",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "preserve",
-    "incremental": true,
+    "types": ["vite/client", "vite-plugin-terminal/client"],
+    "moduleResolution": "Bundler",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "skipLibCheck": true,
+    /* Path mapping */
     "baseUrl": "./src",
     "paths": {
-      "@lib/*": ["lib/*"],
-      "@modules/*": ["modules/*"],
-      "@pages/*": ["pages/*"]
-    },
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ]
+      "@/*": ["*"]
+    }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": [
-    "node_modules",
-    ".next",
-    ".nyc_output",
-    "coverage",
-    "jest-coverage"
-  ]
+  "include": ["src", "vite.config.ts"]
 }
