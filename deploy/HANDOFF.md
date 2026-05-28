@@ -65,6 +65,23 @@ All secrets generated and stored in Bitwarden (see items: `golvfabriken-prod-env
 
 `.env` files on the VPS are mode 600 owned by the `deploy` user — never committed to git.
 
+### Admin credentials
+| What | Where | Login |
+|---|---|---|
+| Medusa admin (prod) | `https://admin.golvfabriken.se/app` | `admin@golvfabriken.se` / `Admin1234!` |
+| Medusa admin (staging) | `https://api.staging.golvfabriken.se/app` | `admin@golvfabriken.se` / `Admin1234!` |
+| Strapi admin (prod) | `https://cms.golvfabriken.se/admin` | created on first visit |
+| Strapi admin (staging) | `https://cms.staging.golvfabriken.se/admin` | created on first visit |
+
+**Rotate `Admin1234!` immediately.** Use `npx medusa user` to change it (see ops cheatsheet below).
+
+### Publishable API keys (already baked into storefront builds)
+- Prod: `pk_6021ef3b1f14b1df92f601585d7f28fce7bd2e903c6b0688d64fb548d4cc26b1`
+- Staging: `pk_2126e80792b3ceacb0c1b4d0ffec86f63d77b53f914f6f4cc87607c27a91c5d6`
+
+Both are linked to their respective default sales channels. Managed at
+Medusa admin → Settings → Publishable API Keys.
+
 ## CI/CD
 GitHub Actions workflows at `.github/workflows/`:
 - `deploy-production.yml` — triggers on push to `main`, builds 3 images, pushes to GHCR, SSH-deploys to `/srv/golvfabriken/prod`
@@ -92,11 +109,85 @@ First deploy was done locally on the VPS (faster smoke test). The pipeline is re
 - Log: `/var/log/pg-backup.log`
 - Test run already done — 4 dumps in R2.
 
-To restore a dump locally:
+### Restoring a backup — full runbook
+
+The pipeline is `pg_dump | gzip | openssl aes-256-cbc -pbkdf2 -iter 200000`. To
+restore, reverse those steps.
+
+You will need:
+- `BACKUP_ENCRYPTION_KEY` from Bitwarden item `golvfabriken-backup-encryption-key`
+- R2 credentials (already on the VPS at `/srv/golvfabriken/backup/.env`)
+- The target Postgres up and reachable
+
+#### 1. List available backups
 ```bash
-openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:BACKUP_ENCRYPTION_KEY \
-  -in prod_medusa_db_<ts>.sql.gz.enc | gunzip | psql -U golvfabriken -d medusa_db
+ssh deploy@204.168.170.60
+docker run --rm \
+  -e AWS_ACCESS_KEY_ID=$(grep R2_ACCESS_KEY_ID /srv/golvfabriken/backup/.env | cut -d= -f2) \
+  -e AWS_SECRET_ACCESS_KEY=$(grep R2_SECRET_ACCESS_KEY /srv/golvfabriken/backup/.env | cut -d= -f2) \
+  amazon/aws-cli --endpoint-url=$(grep R2_ENDPOINT /srv/golvfabriken/backup/.env | cut -d= -f2) \
+  s3 ls s3://golvfabriken-backups/ | sort
 ```
+
+Filenames are `<env>_<db>_<UTC-timestamp>.sql.gz.enc`. Pick the newest acceptable one.
+
+#### 2. Download the chosen dump to the VPS
+```bash
+KEY=prod_medusa_db_20260528T164723Z.sql.gz.enc
+docker run --rm -v /tmp:/data \
+  -e AWS_ACCESS_KEY_ID=$(grep R2_ACCESS_KEY_ID /srv/golvfabriken/backup/.env | cut -d= -f2) \
+  -e AWS_SECRET_ACCESS_KEY=$(grep R2_SECRET_ACCESS_KEY /srv/golvfabriken/backup/.env | cut -d= -f2) \
+  amazon/aws-cli --endpoint-url=$(grep R2_ENDPOINT /srv/golvfabriken/backup/.env | cut -d= -f2) \
+  s3 cp s3://golvfabriken-backups/$KEY /data/$KEY
+```
+
+#### 3. Stop Medusa (so nothing writes during restore)
+```bash
+cd /srv/golvfabriken/prod
+docker compose -f docker-compose.prod.yml --env-file .env stop medusa-backend medusa-worker
+```
+
+#### 4. Decrypt + decompress + pipe into Postgres
+```bash
+# Load the encryption key from Bitwarden into an env var first:
+export BACKUP_ENCRYPTION_KEY='<paste from Bitwarden>'
+
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+    -pass env:BACKUP_ENCRYPTION_KEY \
+    -in /tmp/$KEY \
+  | gunzip \
+  | docker exec -i postgres-prod psql -U golvfabriken -d medusa_db
+```
+
+The dump was taken with `--clean --if-exists`, so it drops existing tables before
+restoring — safe to run against a populated DB (data is replaced, not appended).
+
+#### 5. Bring Medusa back up
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env up -d
+```
+
+#### 6. Sanity-check
+```bash
+docker exec medusa-backend curl -fsS http://127.0.0.1:9000/health
+docker exec postgres-prod psql -U golvfabriken -d medusa_db -c "select count(*) from product;"
+```
+
+#### Restoring Strapi instead
+Substitute `medusa_db` → `golvfabriken_cms` in the filename and the `psql` target.
+Stop `strapi` (not Medusa) during the restore.
+
+#### Restoring to staging
+Substitute `prod` → `staging` and `postgres-prod` → `postgres-staging`. Compose file
+is `docker-compose.staging.yml` in `/srv/golvfabriken/staging/`.
+
+#### Restoring on a fresh VPS (DR scenario)
+1. Run `deploy/bootstrap.sh` on the new server.
+2. Restore the secrets directory (`.env` files) from Bitwarden onto the new VPS.
+3. Pull GHCR images (or rebuild locally — same Dockerfiles work).
+4. `docker compose up -d` postgres+redis first; wait for healthy.
+5. Restore each DB via steps 1-4 above before starting Medusa/Strapi.
+6. `docker compose up -d` the rest.
 
 ## R2 (Cloudflare object storage)
 - `golvfabriken-production` — Strapi media for prod
@@ -104,12 +195,12 @@ openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:BACKUP_ENCRYPTION_KEY
 - `golvfabriken-backups` — DB backups
 - API token is bucket-scoped (verified — cannot list other buckets in the account)
 
-**Recommended next step (not done — needs CF dashboard):**
-Set up Cloudflare custom domain on each media bucket so Strapi serves images from:
+**Custom domains live** (configured in Cloudflare R2 dashboard):
 - `https://media.golvfabriken.se` → `golvfabriken-production`
 - `https://media-staging.golvfabriken.se` → `golvfabriken-staging`
 
-This avoids exposing the raw account ID URL and gives CDN edge caching.
+Strapi `R2_PUBLIC_URL` is already pointed at these. Any file uploaded through the
+Strapi media library will resolve from these CDN-edge-cached domains.
 
 ## Cloudflare DNS records added
 | Subdomain | Type | Target | Proxy |
@@ -129,13 +220,11 @@ The 15 pre-existing A records, all AAAA/MX/TXT/SRV records were **not touched** 
 3. In Cloudflare DNS, edit `@` and `www` A records: change content from `86.106.25.10` → `204.168.170.60`. Also update AAAA records (or delete) since the new origin has a different IPv6.
 4. Old Inleed site goes dark instantly. Coordinate timing.
 
-## Cloudflare WAF (recommended, not done)
-At the CF dashboard:
-- Security → Bots → enable **Bot Fight Mode** (free)
-- Security → WAF → enable **Cloudflare Managed Ruleset**
-- Security → Settings → Security Level: Medium
-- SSL/TLS → Edge Certificates: enable **Always Use HTTPS**, **Automatic HTTPS Rewrites**, set **Min TLS** to 1.2
-- (Optional) Security → WAF → Rate-limit `/admin` and `/app` to 10 req/min/IP
+## Cloudflare WAF (enabled in CF dashboard)
+- Security → Bots → **Bot Fight Mode** ON
+- Security → WAF → **Cloudflare Managed Ruleset** enabled
+- Security Level: Medium
+- SSL/TLS: Full (strict), Always Use HTTPS, Automatic HTTPS Rewrites, Min TLS 1.2
 
 ## Known codebase limitations (not in deploy scope, but listed for your developer)
 
