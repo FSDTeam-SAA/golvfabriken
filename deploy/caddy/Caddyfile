@@ -1,0 +1,111 @@
+# Caddyfile — Golvfabriken (prod + staging on one VPS, behind Cloudflare proxy).
+# DNS-01 ACME challenge via Cloudflare because origin sits behind CF proxy.
+#
+# Required env vars (passed via compose):
+#   ROOT_DOMAIN              e.g. golvfabriken.se
+#   CLOUDFLARE_API_TOKEN     Zone:DNS:Edit + Zone:Zone:Read on the apex zone
+#   ACME_EMAIL               admin email for Let's Encrypt account
+
+{
+	email {$ACME_EMAIL}
+	servers {
+		trusted_proxies cloudflare {
+			interval 12h
+			timeout 15s
+		}
+		# Drop the server header that leaks "Caddy"
+		metrics
+	}
+}
+
+# ---------- Shared security header snippet ----------
+(security_headers) {
+	header {
+		# Force HTTPS for a year, include subdomains, allow preload list submission.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		# Block MIME-type sniffing.
+		X-Content-Type-Options "nosniff"
+		# Only this origin may frame us (mitigates clickjacking).
+		X-Frame-Options "SAMEORIGIN"
+		# Restrict referrer leakage.
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Restrict browser features.
+		Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(self)"
+		# Hide server fingerprint.
+		-Server
+		-X-Powered-By
+	}
+}
+
+# ---------- PRODUCTION ----------
+#
+# NOTE: apex + www are intentionally OMITTED during Phase 1.
+# The live site at golvfabriken.se still serves from the old Inleed host
+# (86.106.25.10). Cutover happens in Phase 2 by:
+#   1) Adding the apex + www blocks back in this file
+#   2) Switching the A records in Cloudflare from 86.106.25.10 -> 204.168.170.60
+#   3) Redeploying
+# Until then, the storefront is reachable for QA via staging.golvfabriken.se.
+
+api.{$ROOT_DOMAIN} {
+	tls {
+		dns cloudflare {$CLOUDFLARE_API_TOKEN}
+	}
+	import security_headers
+	encode zstd gzip
+	reverse_proxy medusa-backend:9000
+}
+
+admin.{$ROOT_DOMAIN} {
+	tls {
+		dns cloudflare {$CLOUDFLARE_API_TOKEN}
+	}
+	import security_headers
+	# Admin must not be indexed.
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+	encode zstd gzip
+	reverse_proxy medusa-backend:9000
+}
+
+cms.{$ROOT_DOMAIN} {
+	tls {
+		dns cloudflare {$CLOUDFLARE_API_TOKEN}
+	}
+	import security_headers
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+	encode zstd gzip
+	reverse_proxy strapi:1337
+}
+
+# ---------- STAGING ----------
+
+staging.{$ROOT_DOMAIN} {
+	tls {
+		dns cloudflare {$CLOUDFLARE_API_TOKEN}
+	}
+	import security_headers
+	# Don't let staging get indexed.
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+	encode zstd gzip
+	reverse_proxy storefront-staging:8000
+}
+
+api.staging.{$ROOT_DOMAIN} {
+	tls {
+		dns cloudflare {$CLOUDFLARE_API_TOKEN}
+	}
+	import security_headers
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+	encode zstd gzip
+	reverse_proxy medusa-backend-staging:9000
+}
+
+cms.staging.{$ROOT_DOMAIN} {
+	tls {
+		dns cloudflare {$CLOUDFLARE_API_TOKEN}
+	}
+	import security_headers
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+	encode zstd gzip
+	reverse_proxy strapi-staging:1337
+}
