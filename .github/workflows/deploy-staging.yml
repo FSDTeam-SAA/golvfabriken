@@ -68,6 +68,9 @@ jobs:
     name: Deploy to VPS
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
 
@@ -98,11 +101,15 @@ jobs:
           MEDUSA_IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/golvfabriken-medusa:${{ env.TAG }}
           STRAPI_IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/golvfabriken-strapi:${{ env.TAG }}
           STOREFRONT_IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/golvfabriken-storefront:${{ env.TAG }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
         run: |
           ssh "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
             MEDUSA_IMAGE="$MEDUSA_IMAGE" \
             STRAPI_IMAGE="$STRAPI_IMAGE" \
             STOREFRONT_IMAGE="$STOREFRONT_IMAGE" \
+            GHCR_TOKEN="$GHCR_TOKEN" \
+            GHCR_USER="$GHCR_USER" \
             'bash -s' <<'REMOTE'
           set -euo pipefail
           cd /srv/golvfabriken/staging
@@ -114,6 +121,9 @@ jobs:
             .env
 
           docker network inspect web >/dev/null 2>&1 || docker network create web
+
+          # Login to GHCR so docker compose pull can read private images.
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
           docker compose -f docker-compose.staging.yml --env-file .env pull
           docker compose -f docker-compose.staging.yml --env-file .env up -d
