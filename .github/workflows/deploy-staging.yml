@@ -83,6 +83,12 @@ jobs:
           # corrupts OpenSSH key parsing -> "error in libcrypto").
           printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          # TEMP DEBUG — reveals only metadata (line count + bytes + BEGIN/END markers), GitHub masks the body.
+          echo "line count: $(wc -l < ~/.ssh/id_ed25519)"
+          echo "byte count: $(wc -c < ~/.ssh/id_ed25519)"
+          echo "starts with BEGIN line: $(head -1 ~/.ssh/id_ed25519 | grep -c BEGIN)"
+          echo "ends with END line: $(tail -1 ~/.ssh/id_ed25519 | grep -c END)"
+          echo "has CR chars: $(grep -c $'\r' ~/.ssh/id_ed25519 || echo 0)"
           ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Sync compose + deploy assets
