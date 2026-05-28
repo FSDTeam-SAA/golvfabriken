@@ -137,14 +137,19 @@ At the CF dashboard:
 - SSL/TLS → Edge Certificates: enable **Always Use HTTPS**, **Automatic HTTPS Rewrites**, set **Min TLS** to 1.2
 - (Optional) Security → WAF → Rate-limit `/admin` and `/app` to 10 req/min/IP
 
-## Known codebase limitations (not in deploy scope)
-These are upstream code issues, not deployment problems. Listed for your developer:
+## Known codebase limitations (not in deploy scope, but listed for your developer)
 
-1. **Storefront SSR fetch URL** — the storefront makes SSR fetches to `https://api.golvfabriken.se` from inside the container, causing a 500 on first render. Fix: use an internal URL (`http://medusa-backend:9000`) for `typeof window === "undefined"` paths, public URL for client. ~5-line change in the API SDK init.
-2. **Stripe** — currently a demo stub; `rk_live` key plugged in to satisfy boot env, but payments won't process. Client said Stripe is being replaced.
-3. **Strapi ↔ Medusa product sync** — webhook receives but doesn't persist (per CLAUDE.md).
-4. **Storefront customer login/register** — pages don't exist.
-5. **Seed data** — demo T-shirts, not real flooring catalog.
+1. **Stripe** — currently a demo stub; `rk_live` key plugged in to satisfy boot env, but payments won't process. Client said Stripe is being replaced.
+2. **Strapi ↔ Medusa product sync** — webhook receives but doesn't persist (per project document).
+3. **Storefront customer login/register** — pages don't exist in storefront source.
+4. **Seed data** — Medusa is seeded with demo T-shirts; replace with real flooring catalog when ready.
+
+### Courtesy patch applied (not in original scope)
+The storefront's `src/lib/utils/sdk.ts` was patched to use an internal Docker URL during SSR
+(`MEDUSA_BACKEND_URL_INTERNAL`) and the public URL for client-side fetches. Without this,
+SSR returned 500 because every page render did a public round-trip through Cloudflare.
+The patch is ~10 lines and stable; if you refactor the SDK init, preserve the
+`!isBrowser && process.env.MEDUSA_BACKEND_URL_INTERNAL` branch.
 
 ## Quick ops cheatsheet (on the VPS)
 

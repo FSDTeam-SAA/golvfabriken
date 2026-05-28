@@ -129,8 +129,10 @@ services:
       HOST: 0.0.0.0
       VITE_MEDUSA_BACKEND_URL: ${VITE_MEDUSA_BACKEND_URL}
       VITE_MEDUSA_PUBLISHABLE_KEY: ${VITE_MEDUSA_PUBLISHABLE_KEY}
+      MEDUSA_BACKEND_URL_INTERNAL: http://medusa-backend:9000
     networks:
       - web
+      - internal
 
 networks:
   internal:
