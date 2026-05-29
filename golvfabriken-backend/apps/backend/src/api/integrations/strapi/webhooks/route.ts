@@ -5,7 +5,9 @@ import {
   validateStrapiWebhookSecret,
   type StrapiWebhookPayload,
 } from "../../../../lib/sync/strapi-webhook";
-import { toSyncEventRecord } from "../../../../lib/sync/events";
+import { enqueueSyncEventId } from "../../../../lib/sync/queue";
+import { SYNC_MODULE } from "../../../../modules/sync";
+import SyncModuleService from "../../../../modules/sync/service";
 
 export async function POST(
   req: MedusaRequest<StrapiWebhookPayload>,
@@ -31,17 +33,22 @@ export async function POST(
   });
 
   const ignored = shouldIgnoreStrapiWebhook(payload);
-
-  // Persistence and queue dispatch come next. For now this endpoint validates
-  // and normalizes the event contract used by the sync worker.
-  res.status(202).json({
+  const syncModuleService: SyncModuleService = req.scope.resolve(SYNC_MODULE);
+  const persisted = await syncModuleService.recordEvent({
+    event: normalizedEvent,
     status: ignored ? "ignored" : "received",
-    event: ignored
-      ? {
-          ...toSyncEventRecord(normalizedEvent),
-          status: "ignored",
-          processed_at: new Date().toISOString(),
-        }
-      : toSyncEventRecord(normalizedEvent),
+    rawPayload: payload,
+    processedAt: ignored ? new Date() : undefined,
+  });
+
+  if (!persisted.duplicate && !ignored && persisted.event?.id) {
+    await enqueueSyncEventId(String(persisted.event.id));
+  }
+
+  res.status(202).json({
+    status: persisted.duplicate ? "duplicate" : ignored ? "ignored" : "received",
+    duplicate: persisted.duplicate,
+    event: persisted.event,
+    mapping: persisted.mapping,
   });
 }

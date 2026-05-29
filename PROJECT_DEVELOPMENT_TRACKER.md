@@ -1,6 +1,6 @@
 # Golvfabriken Ecommerce Development Tracker
 
-Last reviewed: 2026-05-22
+Last reviewed: 2026-05-29
 
 Source FRD: `C:\Users\IT\Downloads\Golvfabriken_FRD_Ecommerce.pdf`
 
@@ -15,7 +15,8 @@ This file tracks what is already implemented, what is partial, and what still ne
 - Lead decision for now: keep the current TanStack storefront because it already builds and has working commerce pages. Do not rewrite it only to match the FRD stack name unless the business explicitly requires Next.js.
 - Local infra: Postgres and Redis are configured through Docker Compose.
 - Storefront build status: `npm --prefix golvfabriken-backend/apps/storefront run build` passed on 2026-05-22 after CMS enrichment and flooring metadata integration. There is one chunk-size warning, not a failing error.
-- Backend build status: `npm --prefix golvfabriken-backend/apps/backend run build` passed on 2026-05-22 after the first Medusa/Strapi sync foundation slice.
+- Backend build status: `npm --prefix golvfabriken-backend/apps/backend run build` passed on 2026-05-29 after queue-first worker updates and sync observability endpoints.
+- Database migration status: sync migration file exists, but it was not applied in this session because local Docker/Postgres/Redis were not running. Start local infra and run `npx medusa db:migrate` before testing persisted webhook writes against the database.
 - Important worktree note: the repository already has a large uncommitted storefront migration/change set. Avoid reverting unrelated existing changes.
 
 ## Development Log
@@ -51,6 +52,125 @@ This file tracks what is already implemented, what is partial, and what still ne
 - [x] Added `STRAPI_WEBHOOK_SECRET` to backend `.env.template`.
 - [x] Added sync README with endpoint, required header, current behavior, and next persistence step.
 - [x] Verified Medusa backend build after changes.
+
+### 2026-05-28 - Phase 2 Continued: Sync Persistence And Idempotency
+
+- [x] Added Medusa custom module `sync` at `golvfabriken-backend/apps/backend/src/modules/sync`.
+- [x] Added `sync_event` DML model for webhook/event persistence, event status, payload checksum, raw payload, retry attempt count, and processed timestamp.
+- [x] Added `sync_mapping` DML model for Medusa/Strapi entity mapping, source tracking, checksum, and sync status.
+- [x] Registered the `sync` module in `golvfabriken-backend/apps/backend/medusa-config.ts`.
+- [x] Added migration `Migration20260528233000` for `sync_event` and `sync_mapping` tables with soft-delete aware indexes.
+- [x] Updated `POST /integrations/strapi/webhooks` to persist normalized Strapi events through the sync module.
+- [x] Added duplicate protection by checking existing `event_id` before creating a new sync event.
+- [x] Added automatic mapping upsert for non-ignored Strapi webhook events when Medusa/Strapi IDs are present.
+- [x] Echo events are now stored with `ignored` status and `processed_at`, but do not update mappings.
+- [x] Verified Medusa backend build after changes. Migration generation via CLI timed out, so the migration was written manually and confirmed in the build output.
+
+### 2026-05-29 - Phase 2 Continued: Medusa Event Intake And Ownership Mappers
+
+- [x] Added Medusa sync event normalization utility in `golvfabriken-backend/apps/backend/src/lib/sync/medusa-event.ts`.
+- [x] Added supported Medusa event mapping for product and product-category create/update/delete/restore events.
+- [x] Added subscriber `sync-product-events.ts` that listens to Medusa product/category events and persists normalized sync events.
+- [x] Added deterministic correlation handling for Medusa-origin events (`sync_correlation_id`/`correlation_id` fallback).
+- [x] Added reusable ownership mappers in `golvfabriken-backend/apps/backend/src/lib/sync/ownership-mapper.ts`:
+- [x] `mapMedusaProductToStrapiEnrichmentInput`
+- [x] `mapStrapiEnrichmentToMedusaProductUpdate`
+- [x] Updated sync README to document current persisted behavior and worker-focused next steps.
+- [x] Verified Medusa backend build after subscriber/mapper additions.
+
+### 2026-05-29 - Phase 2 Continued: Sync Worker Processing And Retry Lifecycle
+
+- [x] Added sync event worker core in `golvfabriken-backend/apps/backend/src/lib/sync/worker.ts`.
+- [x] Added scheduled job `sync-events-processor` in `golvfabriken-backend/apps/backend/src/jobs/process-sync-events.ts` (every minute).
+- [x] Added processable event selection (`received` and retryable `failed`) and attempt-based processing gates.
+- [x] Added status transitions for events: `received/failed -> processing -> processed/failed`.
+- [x] Added retry attempt incrementing and dead-letter marking (`[DEAD_LETTER]` prefix when max attempts reached).
+- [x] Added Strapi sync client in `golvfabriken-backend/apps/backend/src/lib/sync/strapi-client.ts` for Medusa->Strapi upsert by `medusa_id`.
+- [x] Added Strapi->Medusa product update processing path using webhook payload + ownership mapper.
+- [x] Added mapping upsert updates from worker execution results.
+- [x] Added worker env controls in backend `.env.template`: `SYNC_JOB_BATCH_SIZE`, `SYNC_JOB_MAX_ATTEMPTS`.
+- [x] Verified Medusa backend build after worker/job additions.
+
+### 2026-05-29 - Phase 2 Continued: Replay Operations And Cache Invalidation
+
+- [x] Added secure failed-event listing endpoint `GET /integrations/sync/events/failed`.
+- [x] Added secure replay endpoint `POST /integrations/sync/events/replay` for failed/dead-letter requeue.
+- [x] Added `SYNC_ADMIN_SECRET` environment guard for sync operator endpoints.
+- [x] Added `listFailedEvents` and `requeueFailedEvents` methods in sync module service.
+- [x] Added best-effort cache invalidation hook `triggerSyncInvalidation` after successful product sync processing.
+- [x] Added invalidation env controls: `SYNC_INVALIDATION_URL`, `SYNC_INVALIDATION_SECRET`, `SYNC_INVALIDATION_TIMEOUT_MS`.
+- [x] Updated sync README with operator endpoint and invalidation documentation.
+- [x] Verified Medusa backend build after replay/invalidation additions.
+
+### 2026-05-29 - Process Improvement: Credential Registry And Local-First Mode
+
+- [x] Added root credential registry `API_REQUIREMENTS.md` as the single source of truth for required API keys/config.
+- [x] Documented each key's purpose, acquisition steps, env location, and backend usage paths.
+- [x] Added local-first toggle `SYNC_DISABLE_STRAPI_WRITES=true` so sync pipeline development can continue without `STRAPI_URL`/`STRAPI_API_TOKEN`.
+- [x] Updated sync worker to skip Medusa->Strapi outbound writes when credentials are absent or local toggle is enabled.
+- [x] Updated backend env template and sync README with local-first setup guidance.
+
+### 2026-05-29 - Phase 2 Continued: Expanded Event Handler Coverage
+
+- [x] Added Medusa product-variant event intake into sync normalization and subscriber coverage.
+- [x] Added worker handler for `product_variant` events to sync parent product enrichment to Strapi.
+- [x] Added worker handler for `product_category` events to resync all category-linked products to Strapi.
+- [x] Kept local-first fallback behavior for new handlers when Strapi writes are disabled or credentials are missing.
+- [x] Updated sync README to document variant/category coverage.
+- [x] Verified Medusa backend build after expanded handlers.
+
+### 2026-05-29 - Phase 2 Continued: Queue-First Dispatch And Observability APIs
+
+- [x] Added Redis queue utility `src/lib/sync/queue.ts` with enqueue, dequeue, requeue, and queue-depth helpers.
+- [x] Updated Strapi webhook intake route and Medusa event subscriber to enqueue sync event IDs immediately after persistence.
+- [x] Updated replay endpoint to enqueue requeued event IDs so replay enters the same processing path.
+- [x] Refactored sync worker to support queue-first processing (`processSyncEventsFromQueue`) with DB polling fallback.
+- [x] Added retry requeue behavior for non-dead-letter failures in queue mode.
+- [x] Added secure sync observability endpoints:
+- [x] `GET /integrations/sync/status` (event status counts + queue depth)
+- [x] `GET /integrations/sync/events/recent` (recent sync events)
+- [x] Refactored sync admin-secret validation into shared helper `src/api/integrations/sync/utils/admin-auth.ts`.
+- [x] Verified Medusa backend build after queue and observability additions.
+
+### 2026-05-29 - Phase 2 Continued: Worker Throughput Scaling (Configurable Concurrency)
+
+- [x] Added configurable sync worker concurrency support in `src/lib/sync/worker.ts`.
+- [x] Kept backward-safe behavior with default sequential processing (`SYNC_JOB_CONCURRENCY=1`).
+- [x] Added bounded concurrency control (max 20 per run) to prevent accidental overload.
+- [x] Updated sync job runner to pass concurrency and include it in sync-job logs.
+- [x] Added environment configuration `SYNC_JOB_CONCURRENCY` in backend `.env.template`.
+- [x] Updated sync documentation and API requirements registry for concurrency configuration.
+- [x] Verified Medusa backend build after concurrency changes.
+
+### 2026-05-29 - Phase 2 Continued: Processing-Lease Timeout Recovery
+
+- [x] Added stuck-event recovery in sync service for stale `processing` events.
+- [x] Added lease-timeout controls: `SYNC_PROCESSING_STALE_AFTER_SECONDS` and `SYNC_PROCESSING_RECOVERY_LIMIT`.
+- [x] Added pre-processing recovery pass in sync job to reclaim stale work before normal dequeue/poll.
+- [x] In Redis queue mode, recovered retryable events are re-enqueued automatically.
+- [x] Stale events at or above max attempts are marked dead-lettered with explicit lease-timeout reason.
+- [x] Added recovery counters in sync-job log output for operational visibility.
+- [x] Updated sync docs and API requirements registry with recovery settings.
+- [x] Verified Medusa backend build after lease-timeout recovery changes.
+
+### 2026-05-29 - Phase 2 Continued: Price And Inventory Ownership Event Coverage
+
+- [x] Expanded Medusa sync event normalization to include pricing and inventory events.
+- [x] Added subscriber coverage for `InventoryEvents` (`inventory_item`, `inventory_level`) and `PricingEvents` (`price_set`, `price`).
+- [x] Added worker handlers for `inventory_item` and `inventory_level` events that resolve linked variants/products and sync affected products to Strapi.
+- [x] Added worker handlers for `price_set` and `price` events that resolve linked variants/products and sync affected products to Strapi.
+- [x] Reused existing product sync pipeline (`syncMedusaProductByIdToStrapi`) to avoid duplicate sync logic.
+- [x] Updated sync README to document pricing/inventory ownership coverage and remaining edge cases.
+- [x] Verified Medusa backend build after pricing/inventory coverage changes.
+
+### 2026-05-29 - Phase 2 Continued: Distributed Job Lease Lock
+
+- [x] Added Redis-based distributed lease lock for sync job runs.
+- [x] Added safe acquire/skip/release flow around the scheduled sync processor job.
+- [x] Added lock controls: `SYNC_JOB_DISTRIBUTED_LOCK`, `SYNC_JOB_LOCK_KEY`, `SYNC_JOB_LOCK_TTL_SECONDS`.
+- [x] Prevents overlapping sync job runs across multiple backend instances while preserving local single-instance behavior.
+- [x] Updated sync README and API requirements registry for distributed lock settings.
+- [x] Verified Medusa backend build after distributed lock changes.
 
 ## Completed Or Mostly Completed
 
@@ -110,8 +230,8 @@ This file tracks what is already implemented, what is partial, and what still ne
 - [x] Product enrichment content type exists.
 - [x] Product enrichment now supports Medusa ID/SKU mapping, editorial descriptions, media gallery, OG image, video URL, SEO fields, robots/canonical fields, visibility, mirrored commerce status, and sync metadata.
 - [~] Product enrichment is localized through Strapi i18n at the content type level.
-- [~] Strapi webhook processing has started: backend now validates and normalizes Strapi webhook events, but does not persist or dispatch them yet.
-- [ ] Automated Medusa/Strapi sync worker is missing.
+- [~] Strapi webhook processing is operational: backend validates, normalizes, persists, deduplicates, maps, and dispatches queue events. Worker target-write paths now cover product/variant/category/inventory/pricing-linked sync, with reconciliation/conflict tooling still pending.
+- [~] Automated Medusa/Strapi sync worker exists as scheduled queue-first processing; dedicated long-running worker runtime is still pending.
 
 ## Not Completed Yet By FRD Module
 
@@ -119,7 +239,7 @@ This file tracks what is already implemented, what is partial, and what still ne
 
 - [~] Three-system architecture exists: Medusa, Strapi, storefront.
 - [ ] FRD integration rule is not complete: Fraktjakt and Klarna must be called only from Medusa backend.
-- [~] Dedicated integration layer has started with shared sync event utilities and a secure Strapi webhook receiver; queue/worker persistence is still missing.
+- [~] Dedicated integration layer has started with shared sync event utilities, secure Strapi webhook receiver, and persisted sync event/mapping storage. Queue worker and cross-system write handlers are still missing.
 - [ ] Role-based architecture across Super Admin, Sales Manager, Content Editor, Logistics Lead, B2B Company Admin, Buyer, Approver, and B2C Customer is not implemented.
 
 ### 2. Authentication And Security
@@ -285,8 +405,8 @@ This file tracks what is already implemented, what is partial, and what still ne
 
 - [~] Medusa and Strapi support events/webhooks at framework level.
 - [~] Custom event contract from the FRD has started through a normalized sync event model.
-- [ ] Endpoint registration UI is missing.
-- [~] Delivery retry/logs/signature/event filtering are partially started: Strapi secret validation and echo filtering exist, but retry logs and endpoint registration are missing.
+- [~] Endpoint registration API routes exist for sync operator use (failed list/replay), but FRD-level endpoint registration UI is still missing.
+- [~] Delivery retry/logs/signature/event filtering are partially started: Strapi secret validation, Medusa + Strapi event intake (including product/variant/category/inventory/pricing events), echo filtering, persisted event logs, idempotency, queue-first retry handling, dead-letter marking, replay endpoints, status/recent observability APIs, configurable worker concurrency, stale-processing lease recovery, and distributed job lease locking exist, but endpoint registration UI and queue-backed horizontal worker scaling are still missing.
 - [x] Event payload standard is implemented for the first Strapi-to-Medusa webhook slice.
 
 ### 17. Settings And Configuration
@@ -321,12 +441,12 @@ This file tracks what is already implemented, what is partial, and what still ne
 
 - [ ] Fortnox 2-way sync is missing.
 - [ ] Fraktjakt 2-way sync is missing.
-- [~] Strapi <-> Medusa 2-way sync foundation has started with webhook validation and normalized event contracts.
-- [~] Dedicated sync mappings table is missing, but its record shape is now defined in code.
-- [~] Sync events table is missing, but its idempotency/event record shape is now defined in code.
-- [ ] Queue worker is missing.
+- [~] Strapi <-> Medusa 2-way sync foundation has started with webhook validation, normalized event contracts, persisted event logs, mapping storage, Medusa-origin event subscribers, replay operations, and expanded product/variant/category/inventory/pricing sync handlers.
+- [x] Dedicated sync mappings table is implemented through the Medusa `sync` module and migration.
+- [x] Sync events table is implemented through the Medusa `sync` module and migration.
+- [~] Queue-first worker flow is implemented with Redis enqueue/dequeue/requeue, DB polling fallback, configurable per-run concurrency, stale-processing lease recovery, and distributed job lease locking; dedicated long-running worker scaling with stronger per-message visibility-timeout guarantees is still missing.
 - [~] Idempotency and loop prevention helpers have started; conflict handling, dead-letter queue, and reconciliation job are missing.
-- [ ] Targeted cache invalidation/revalidation is missing.
+- [~] Targeted cache invalidation/revalidation is implemented as best-effort webhook trigger after successful product sync; storefront endpoint implementation and delivery observability are still missing.
 
 ## Recommended Development Order
 
@@ -356,15 +476,15 @@ Goal: create the product/content data contract that checkout, SEO, search, Frakt
 
 Goal: implement the most reusable integration layer from the FRD before adding more integrations.
 
-- [~] Create sync mapping storage. Record shape is defined; persistence is not implemented yet.
-- [~] Create sync event/idempotency storage. Record shape and checksum/event ID helpers are defined; persistence is not implemented yet.
-- [ ] Add Medusa subscriber for product/category changes.
+- [x] Create sync mapping storage.
+- [x] Create sync event/idempotency storage.
+- [x] Add Medusa subscriber for product/category changes.
 - [x] Add secure Strapi webhook receiver.
-- [~] Add mapping functions for Medusa-to-Strapi and Strapi-to-Medusa ownership rules. Strapi event normalization exists; target write mappers are not implemented yet.
-- [~] Add loop prevention metadata. Echo detection exists for webhook events; persisted processed-correlation tracking is not implemented yet.
-- [ ] Add retry/dead-letter behavior using Redis-backed queue.
-- [ ] Add targeted storefront cache invalidation or revalidation.
-- [~] Add sync logs and a minimal admin/debug view. Webhook response returns normalized event details for debugging; persistent logs and admin UI are missing.
+- [~] Add mapping functions for Medusa-to-Strapi and Strapi-to-Medusa ownership rules. Worker execution now exists for product, product-variant (via parent product sync), product-category-linked product sync, and pricing/inventory-linked product sync; additional ownership coverage is still needed for price-list and inventory-reservation edge cases.
+- [~] Add loop prevention metadata. Echo detection exists for webhook events, and ignored echoes are persisted; processed-correlation tracking for outbound writes is not implemented yet.
+- [~] Add retry/dead-letter behavior using Redis-backed queue. Queue-first retry/dead-letter/replay behavior is implemented with configurable per-run concurrency, stale-processing lease recovery, and distributed job lease locking; dedicated long-running worker scaling and stronger per-message visibility-timeout semantics are pending.
+- [~] Add targeted storefront cache invalidation or revalidation. Best-effort invalidation webhook exists; storefront endpoint and observability are pending.
+- [~] Add sync logs and a minimal admin/debug view. Persistent event logs, replay APIs, and status/recent observability APIs now exist; admin/debug UI is missing.
 
 ### Phase 3 - Checkout Revenue Path: Fraktjakt First, Klarna Second
 
@@ -438,6 +558,6 @@ Goal: make the platform manageable after sales start.
 
 Continue Phase 2: Medusa/Strapi Sync Foundation.
 
-Reason: product/CMS enrichment is now wired enough for a real sync layer to start. The next blocker is persistence: `sync_events` and `sync_mappings` must be saved before we dispatch work to Redis or write back across systems.
+Reason: queue-first processing, observability, concurrency, stale-processing recovery, distributed job lease locking, and core pricing/inventory ownership coverage are in place. The highest-value remaining Phase 2 gap is stronger per-message ack/visibility semantics plus ownership edge-case coverage.
 
-Next concrete slice: add Medusa module/database persistence for sync mappings and sync events, then update the Strapi webhook route to store events and ignore duplicate `event_id` values.
+Next concrete slice: add a dedicated long-running queue worker with per-message visibility-timeout/ack semantics, then add sync admin UI and ownership edge-case coverage (price lists/reservations/conflicts).
