@@ -79,6 +79,29 @@ export type RecoverStuckProcessingEventsResult = {
   deadLetterIds: string[];
 };
 
+export type SyncMappingStatusCounts = {
+  pending: number;
+  synced: number;
+  failed: number;
+  conflict: number;
+  total: number;
+};
+
+export type ReconcileMappingsInput = {
+  limit?: number;
+  markConflict?: boolean;
+  note?: string;
+};
+
+export type ReconcileMappingsResult = {
+  scanned: number;
+  conflictCount: number;
+  invalidCount: number;
+  duplicateMedusaKeyCount: number;
+  duplicateStrapiKeyCount: number;
+  conflictIds: string[];
+};
+
 const toDate = (value?: string | Date | null) => {
   if (!value) {
     return undefined;
@@ -518,6 +541,189 @@ class SyncModuleService extends MedusaService({
       deadLettered: deadLetterIds.length,
       requeueIds,
       deadLetterIds,
+    };
+  }
+
+  async listMappingsByStatus({
+    status,
+    limit = 100,
+  }: {
+    status: "pending" | "synced" | "failed" | "conflict";
+    limit?: number;
+  }) {
+    const generated = this as unknown as GeneratedSyncModuleService;
+    const take = Math.max(Math.min(Number(limit) || 100, 500), 1);
+    const mappings = await generated.listSyncMappings(
+      {
+        sync_status: status,
+      },
+      { take: Math.max(take * 2, 100) }
+    );
+
+    return mappings
+      .sort((a, b) => {
+        return new Date(b.updated_at || b.created_at).getTime() -
+          new Date(a.updated_at || a.created_at).getTime();
+      })
+      .slice(0, take);
+  }
+
+  async getMappingStatusCounts(scanLimit = 1000): Promise<SyncMappingStatusCounts> {
+    const generated = this as unknown as GeneratedSyncModuleService;
+    const take = Math.max(Math.min(Number(scanLimit) || 1000, 10000), 1);
+    const mappings = await generated.listSyncMappings({}, { take });
+    const counts: SyncMappingStatusCounts = {
+      pending: 0,
+      synced: 0,
+      failed: 0,
+      conflict: 0,
+      total: mappings.length,
+    };
+
+    for (const mapping of mappings) {
+      const status = String(mapping.sync_status || "");
+
+      if (status === "pending") {
+        counts.pending += 1;
+      } else if (status === "synced") {
+        counts.synced += 1;
+      } else if (status === "failed") {
+        counts.failed += 1;
+      } else if (status === "conflict") {
+        counts.conflict += 1;
+      }
+    }
+
+    return counts;
+  }
+
+  async reconcileMappings({
+    limit = 2000,
+    markConflict = true,
+    note,
+  }: ReconcileMappingsInput = {}): Promise<ReconcileMappingsResult> {
+    const generated = this as unknown as GeneratedSyncModuleService;
+    const take = Math.max(Math.min(Number(limit) || 2000, 20000), 1);
+    const mappings = await generated.listSyncMappings({}, { take });
+    const byMedusaKey = new Map<string, any[]>();
+    const byStrapiKey = new Map<string, any[]>();
+    const conflictIds = new Set<string>();
+    const invalidIds = new Set<string>();
+
+    for (const mapping of mappings) {
+      const medusaId = String(mapping.medusa_id || "").trim();
+      const strapiId = String(mapping.strapi_document_id || "").trim();
+      const entityType = String(mapping.entity_type || "").trim() || "unknown";
+
+      if (medusaId) {
+        const key = `${entityType}::medusa::${medusaId}`;
+        byMedusaKey.set(key, [...(byMedusaKey.get(key) || []), mapping]);
+      }
+
+      if (strapiId) {
+        const key = `${entityType}::strapi::${strapiId}`;
+        byStrapiKey.set(key, [...(byStrapiKey.get(key) || []), mapping]);
+      }
+
+      if (!medusaId && !strapiId) {
+        conflictIds.add(mapping.id);
+        invalidIds.add(mapping.id);
+      }
+    }
+
+    let duplicateMedusaKeyCount = 0;
+    let duplicateStrapiKeyCount = 0;
+
+    for (const items of byMedusaKey.values()) {
+      if (items.length > 1) {
+        duplicateMedusaKeyCount += 1;
+        for (const item of items) {
+          conflictIds.add(item.id);
+        }
+      }
+    }
+
+    for (const items of byStrapiKey.values()) {
+      if (items.length > 1) {
+        duplicateStrapiKeyCount += 1;
+        for (const item of items) {
+          conflictIds.add(item.id);
+        }
+      }
+    }
+
+    const conflictIdList = Array.from(conflictIds);
+
+    if (markConflict && conflictIdList.length) {
+      const conflictReason =
+        note ||
+        "[RECONCILE_CONFLICT] Duplicate/invalid sync mapping detected by reconciliation";
+
+      for (const mappingId of conflictIdList) {
+        await generated.updateSyncMappings({
+          selector: {
+            id: mappingId,
+          },
+          data: {
+            sync_status: "conflict",
+            last_error: conflictReason,
+          },
+        });
+      }
+    }
+
+    return {
+      scanned: mappings.length,
+      conflictCount: conflictIdList.length,
+      invalidCount: invalidIds.size,
+      duplicateMedusaKeyCount,
+      duplicateStrapiKeyCount,
+      conflictIds: conflictIdList,
+    };
+  }
+
+  async resolveMappingConflicts({
+    ids,
+    status = "synced",
+    note,
+  }: {
+    ids: string[];
+    status?: "pending" | "synced" | "failed" | "conflict";
+    note?: string;
+  }) {
+    const generated = this as unknown as GeneratedSyncModuleService;
+
+    if (!ids.length) {
+      return {
+        selected: 0,
+        updated: 0,
+      };
+    }
+
+    const mappings = await generated.listSyncMappings(
+      {
+        id: ids,
+      },
+      {
+        take: ids.length,
+      }
+    );
+
+    for (const mapping of mappings) {
+      await generated.updateSyncMappings({
+        selector: {
+          id: mapping.id,
+        },
+        data: {
+          sync_status: status,
+          last_error: note || null,
+        },
+      });
+    }
+
+    return {
+      selected: ids.length,
+      updated: mappings.length,
     };
   }
 

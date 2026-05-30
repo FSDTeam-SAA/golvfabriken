@@ -100,6 +100,38 @@ const MEDUSA_SYNC_EVENT_MAP: Record<string, MedusaSyncEventDescriptor> = {
     entity_type: "inventory_level",
     operation: "update",
   },
+  [InventoryEvents.RESERVATION_ITEM_CREATED]: {
+    entity_type: "reservation_item",
+    operation: "create",
+  },
+  [InventoryEvents.RESERVATION_ITEM_UPDATED]: {
+    entity_type: "reservation_item",
+    operation: "update",
+  },
+  [InventoryEvents.RESERVATION_ITEM_DELETED]: {
+    entity_type: "reservation_item",
+    operation: "delete",
+  },
+  [InventoryEvents.RESERVATION_ITEM_RESTORED]: {
+    entity_type: "reservation_item",
+    operation: "update",
+  },
+  [PricingEvents.PRICE_LIST_CREATED]: {
+    entity_type: "price_list",
+    operation: "create",
+  },
+  [PricingEvents.PRICE_LIST_UPDATED]: {
+    entity_type: "price_list",
+    operation: "update",
+  },
+  [PricingEvents.PRICE_LIST_DELETED]: {
+    entity_type: "price_list",
+    operation: "delete",
+  },
+  [PricingEvents.PRICE_LIST_RESTORED]: {
+    entity_type: "price_list",
+    operation: "update",
+  },
   [PricingEvents.PRICE_SET_CREATED]: {
     entity_type: "price_set",
     operation: "create",
@@ -193,8 +225,16 @@ const normalizeEntityTypeFromEventName = (eventName: string) => {
     return "inventory_level";
   }
 
+  if (eventName.includes("reservation-item")) {
+    return "reservation_item";
+  }
+
   if (eventName.includes("inventory-item")) {
     return "inventory_item";
+  }
+
+  if (eventName.includes("price-list")) {
+    return "price_list";
   }
 
   if (eventName.includes("price-set")) {

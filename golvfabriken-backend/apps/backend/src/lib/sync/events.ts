@@ -132,5 +132,40 @@ export const shouldIgnoreSyncEcho = ({
   syncOrigin?: string;
   sourceSystem: SyncSourceSystem;
 }) => {
-  return syncOrigin === "integration-service" || syncOrigin === sourceSystem;
+  const normalizedOrigin = String(syncOrigin || "")
+    .trim()
+    .toLowerCase();
+
+  if (!normalizedOrigin) {
+    return false;
+  }
+
+  if (normalizedOrigin === sourceSystem) {
+    return true;
+  }
+
+  if (
+    normalizedOrigin === "integration-service" ||
+    normalizedOrigin === "integration" ||
+    normalizedOrigin === "system" ||
+    normalizedOrigin === "scheduled_sync"
+  ) {
+    return true;
+  }
+
+  if (
+    sourceSystem === "strapi" &&
+    (normalizedOrigin === "medusa" || normalizedOrigin.startsWith("medusa-"))
+  ) {
+    return true;
+  }
+
+  if (
+    sourceSystem === "medusa" &&
+    (normalizedOrigin === "strapi" || normalizedOrigin.startsWith("strapi-"))
+  ) {
+    return true;
+  }
+
+  return false;
 };

@@ -1,6 +1,6 @@
 # Golvfabriken Ecommerce Development Tracker
 
-Last reviewed: 2026-05-29
+Last reviewed: 2026-05-30
 
 Source FRD: `C:\Users\IT\Downloads\Golvfabriken_FRD_Ecommerce.pdf`
 
@@ -15,9 +15,15 @@ This file tracks what is already implemented, what is partial, and what still ne
 - Lead decision for now: keep the current TanStack storefront because it already builds and has working commerce pages. Do not rewrite it only to match the FRD stack name unless the business explicitly requires Next.js.
 - Local infra: Postgres and Redis are configured through Docker Compose.
 - Storefront build status: `npm --prefix golvfabriken-backend/apps/storefront run build` passed on 2026-05-22 after CMS enrichment and flooring metadata integration. There is one chunk-size warning, not a failing error.
-- Backend build status: `npm --prefix golvfabriken-backend/apps/backend run build` passed on 2026-05-29 after queue-first worker updates and sync observability endpoints.
+- Backend build status: `npm --prefix golvfabriken-backend/apps/backend run build` passed on 2026-05-30 after ownership edge-case handler coverage updates.
 - Database migration status: sync migration file exists, but it was not applied in this session because local Docker/Postgres/Redis were not running. Start local infra and run `npx medusa db:migrate` before testing persisted webhook writes against the database.
 - Important worktree note: the repository already has a large uncommitted storefront migration/change set. Avoid reverting unrelated existing changes.
+
+## Progress Snapshot
+
+- Overall project progress estimate: **86% complete**.
+- Remaining estimate: **14%**.
+- Highest-impact remaining scope: live Fraktjakt/Klarna/Fortnox provider execution + B2B/account modules + storefront/admin UX surfaces.
 
 ## Development Log
 
@@ -163,6 +169,72 @@ This file tracks what is already implemented, what is partial, and what still ne
 - [x] Updated sync README to document pricing/inventory ownership coverage and remaining edge cases.
 - [x] Verified Medusa backend build after pricing/inventory coverage changes.
 
+### 2026-05-30 - Phase 2 Continued: Ownership Edge-Case Closure (Price-List + Reservation)
+
+- [x] Added Medusa sync normalization mapping for `reservation_item` and `price_list` events.
+- [x] Expanded Medusa subscriber coverage for `InventoryEvents.RESERVATION_ITEM_*` and `PricingEvents.PRICE_LIST_*`.
+- [x] Added worker handling for `reservation_item` events by resolving linked `inventory_item -> variant -> product` and syncing affected products.
+- [x] Added worker handling for `price_list` events by resolving linked `price -> price_set -> variant -> product` and syncing affected products.
+- [x] Reused existing product sync pipeline (`syncMedusaProductByIdToStrapi`) to avoid duplicate ownership logic.
+- [x] Hardened webhook echo filtering so Medusa-origin integration writes (`sync_origin=medusa*`) are ignored safely on Strapi webhook intake.
+- [x] Added unit coverage for sync event normalization + echo filtering (`src/lib/sync/__tests__/sync-events.unit.spec.ts`).
+- [x] Added missing Jest setup stub (`integration-tests/setup.js`) so local unit tests can run with current Jest config.
+- [x] Verified Medusa backend build after ownership edge-case closure updates.
+- [x] Verified unit tests for sync helpers (`5 passed`).
+
+### 2026-05-30 - Phase 3 Foundation: Client Request Coverage (Tax/Returns/Import/Integrations)
+
+- [x] Added new Medusa backend `ops` module (`src/modules/ops`) for operational workflows requested by client.
+- [x] Added persisted models and migration for:
+- [x] `ops_tax_configuration` (VAT/tax profile configs),
+- [x] `ops_complaint_case` (complaint intake/case lifecycle),
+- [x] `ops_return_request_case` (return lifecycle records),
+- [x] `ops_import_job` (import tracking and status),
+- [x] `ops_integration_connector` (shipping/payment/accounting integration state + SKIP status).
+- [x] Registered new `ops` module in backend config.
+- [x] Added secure admin API surface (guarded by `OPS_ADMIN_SECRET`) for:
+- [x] complaints create/list/status,
+- [x] returns create/list/status,
+- [x] tax configuration upsert/list,
+- [x] import job create/list/status,
+- [x] integration connector register/list/status + bootstrap defaults.
+- [x] Added storefront support intake APIs for complaint and return requests (`/store/support/complaints`, `/store/support/returns`).
+- [x] Added env placeholders for Fraktjakt/Klarna/Fortnox and `OPS_ADMIN_SECRET` in backend env template.
+- [x] Updated API requirements registry with integration keys marked as SKIP until credentials are available.
+- [x] Verified Medusa backend build after ops module and routes.
+
+### 2026-05-30 - Phase 3 Continued: Integration Runtime And SKIP-Safe Preview Flows
+
+- [x] Added integration runtime helper layer (`src/lib/ops/integration-runtime.ts`) for Fraktjakt/Klarna/Fortnox readiness checks.
+- [x] Added SKIP-safe simulation mode toggle `OPS_INTEGRATION_SIMULATION_MODE` for local/provider-pending development.
+- [x] Added integration health-check admin endpoint (`POST /admin/ops/integrations/health-check`) that updates connector status from runtime env readiness.
+- [x] Added shipping quote preview endpoints:
+- [x] `POST /admin/ops/shipping/quote-preview`
+- [x] `POST /store/checkout/shipping/quote-preview`
+- [x] Added Klarna session preview endpoints:
+- [x] `POST /admin/ops/payments/klarna/session-preview`
+- [x] `POST /store/checkout/payments/klarna/session-preview`
+- [x] Added Fortnox export orchestration endpoints (`GET/POST /admin/ops/accounting/fortnox/exports`).
+- [x] Added Fortnox export job creation/list logic in ops service backed by `ops_import_job` metadata workflow.
+- [x] Updated ops module documentation and API requirements for simulation and SKIP runtime behavior.
+- [x] Verified Medusa backend build after integration-runtime additions.
+
+### 2026-05-30 - Phase 3 Continued: Tax Runtime, Import Execution, And Workflow Hardening
+
+- [x] Added reusable VAT/tax quote runtime helper (`src/lib/ops/tax-runtime.ts`) with:
+- [x] active tax-config matching by country/region,
+- [x] tax-inclusive and tax-exclusive calculation paths,
+- [x] EU reverse-charge decisioning for B2B with VAT ID.
+- [x] Added admin tax quote preview endpoint (`POST /admin/ops/tax-configurations/quote-preview`).
+- [x] Added storefront tax quote preview endpoint (`POST /store/checkout/tax/quote-preview`).
+- [x] Added import execution endpoint (`POST /admin/ops/imports/product-catalog/execute`) with staged-row output and validation-aware status updates.
+- [x] Added import report endpoint (`GET /admin/ops/imports/product-catalog/report?job_id=<id>`).
+- [x] Added complaint/return lifecycle transition guards in ops service to prevent invalid status jumps.
+- [x] Added error-safe status update responses for complaint/return status routes.
+- [x] Added tax runtime config baseline `OPS_MERCHANT_COUNTRY_CODE=SE` in backend env template.
+- [x] Added unit coverage for tax runtime (`src/lib/ops/__tests__/tax-runtime.unit.spec.ts`).
+- [x] Verified Medusa backend build and unit tests after these additions.
+
 ### 2026-05-29 - Phase 2 Continued: Distributed Job Lease Lock
 
 - [x] Added Redis-based distributed lease lock for sync job runs.
@@ -171,6 +243,60 @@ This file tracks what is already implemented, what is partial, and what still ne
 - [x] Prevents overlapping sync job runs across multiple backend instances while preserving local single-instance behavior.
 - [x] Updated sync README and API requirements registry for distributed lock settings.
 - [x] Verified Medusa backend build after distributed lock changes.
+
+### 2026-05-29 - Phase 2 Continued: Queue Visibility Timeout And Per-Message Ack
+
+- [x] Upgraded queue consumption to reliable in-flight flow (`LMOVE` to processing list).
+- [x] Added per-message ack path that removes completed items from processing list.
+- [x] Added retry requeue path that returns failed retryable items from processing list back to queue.
+- [x] Added stale in-flight recovery using visibility metadata and timeout-based queue replay.
+- [x] Added queue processing keys and visibility controls in backend environment config.
+- [x] Updated sync job to run queue stale-recovery pass before normal processing.
+- [x] Extended sync status queue depth output to include in-flight processing depth.
+- [x] Updated sync README and API requirements registry for reliable queue controls.
+- [x] Verified Medusa backend build after queue visibility/ack changes.
+
+### 2026-05-29 - Phase 2 Continued: Continuous Worker Runtime Mode
+
+- [x] Added optional continuous mode to sync job runtime for bounded always-on queue draining behavior per invocation.
+- [x] Added continuous loop controls: runtime budget, idle backoff, active pacing, and max idle iterations.
+- [x] Preserved distributed lock behavior while running continuous loop mode.
+- [x] Added cycle aggregation logging for continuous mode (iterations/runtime/throughput/recovery counters).
+- [x] Updated backend environment template, sync README, and API requirements registry for continuous mode controls.
+- [x] Verified Medusa backend build after continuous runtime mode changes.
+
+### 2026-05-29 - Phase 2 Continued: Queue Operations Control Surface
+
+- [x] Added secure queue status endpoint with depth, in-flight, lock, pause, and stale inspection data.
+- [x] Added secure queue pause/resume endpoint for controlled maintenance windows.
+- [x] Added secure queue stale-recovery endpoint for manual operator recovery.
+- [x] Added secure manual process endpoint (`process-once`) to trigger sync cycles on demand.
+- [x] Extended sync status output with lock/pause/stale diagnostics.
+- [x] Added queue pause key and operation controls to env template and API requirements.
+- [x] Updated sync README with new queue operations endpoints and usage.
+- [x] Verified Medusa backend build after queue operations control additions.
+
+### 2026-05-29 - Phase 2 Continued: Standalone Worker Daemon Lifecycle
+
+- [x] Added standalone daemon script `src/scripts/sync-worker-daemon.ts` using `medusa exec`.
+- [x] Added daemon run commands in backend package scripts (`sync:worker:daemon`, `sync:worker:once`).
+- [x] Added graceful shutdown signal handling for daemon loops (`SIGINT`/`SIGTERM`).
+- [x] Added daemon runtime controls (poll interval, error backoff, heartbeat, continuous runtime budget).
+- [x] Added cron lifecycle toggle `SYNC_JOB_DISABLED` so daemon/manual paths can run without cron overlap.
+- [x] Updated manual process endpoint to force execution even when cron job is disabled.
+- [x] Updated env template, sync README, and API requirements for daemon lifecycle controls.
+- [x] Verified Medusa backend build after standalone daemon lifecycle additions.
+
+### 2026-05-29 - Phase 2 Continued: Reconciliation And Conflict Tooling
+
+- [x] Added mapping reconciliation methods in sync service (duplicate Medusa key / duplicate Strapi key / invalid mapping detection).
+- [x] Added secure reconciliation endpoint `POST /integrations/sync/mappings/reconcile`.
+- [x] Added secure mapping status endpoint `GET /integrations/sync/mappings/status`.
+- [x] Added secure conflict list endpoint `GET /integrations/sync/mappings/conflicts`.
+- [x] Added secure conflict resolution endpoint `POST /integrations/sync/mappings/conflicts/resolve`.
+- [x] Added scheduled reconciliation job `sync-mapping-reconcile` (disabled by default).
+- [x] Added reconciliation env controls and updated API requirements + sync README.
+- [x] Verified Medusa backend build after reconciliation/conflict tooling additions.
 
 ## Completed Or Mostly Completed
 
@@ -230,8 +356,8 @@ This file tracks what is already implemented, what is partial, and what still ne
 - [x] Product enrichment content type exists.
 - [x] Product enrichment now supports Medusa ID/SKU mapping, editorial descriptions, media gallery, OG image, video URL, SEO fields, robots/canonical fields, visibility, mirrored commerce status, and sync metadata.
 - [~] Product enrichment is localized through Strapi i18n at the content type level.
-- [~] Strapi webhook processing is operational: backend validates, normalizes, persists, deduplicates, maps, and dispatches queue events. Worker target-write paths now cover product/variant/category/inventory/pricing-linked sync, with reconciliation/conflict tooling still pending.
-- [~] Automated Medusa/Strapi sync worker exists as scheduled queue-first processing; dedicated long-running worker runtime is still pending.
+- [~] Strapi webhook processing is operational: backend validates, normalizes, persists, deduplicates, maps, dispatches queue events, supports queue ops controls (pause/recover/manual process), and now includes reconciliation/conflict tooling; UI-driven conflict ergonomics are still pending.
+- [x] Automated Medusa/Strapi sync worker now supports scheduled mode, bounded continuous mode, and dedicated standalone daemon lifecycle commands.
 
 ## Not Completed Yet By FRD Module
 
@@ -263,7 +389,7 @@ This file tracks what is already implemented, what is partial, and what still ne
 - [ ] Wishlist module is missing.
 - [ ] Customer order history page is missing.
 - [ ] Re-order action is missing.
-- [ ] Customer return request flow is missing.
+- [~] Customer return request backend intake now exists (`POST /store/support/returns`), but customer account UI and self-service tracking are still missing.
 - [ ] Customer order cancellation flow is missing.
 
 ### 4. Product And Catalog Management
@@ -337,13 +463,15 @@ This file tracks what is already implemented, what is partial, and what still ne
 - [ ] Custom order lifecycle including B2B pending approval is missing.
 - [ ] Admin order detail extension from FRD is missing.
 - [ ] Internal/customer notes and resend confirmation action are missing.
-- [ ] Returns/RMA workflow is missing.
+- [~] Returns/complaint intake, status records, store status lookup, and lifecycle transition guards now exist in backend ops APIs, but full RMA automation (labels/refund orchestration) is still missing.
 - [ ] Return label generation is missing.
 - [ ] Partial refunds and restocking workflow are missing.
 
 ### 10. Fraktjakt Integration
 
 - [ ] Fraktjakt backend provider/module is missing.
+- [~] Fraktjakt integration connector registry + SKIP-state tracking exists in ops module; provider implementation is still missing.
+- [~] Fraktjakt runtime readiness checks and shipping quote preview endpoints now exist for admin/storefront flows; live carrier API calls are still pending.
 - [ ] Query/Requery/Order/Shipment/Track/Cancel/Return/Address/Customs API handling is missing.
 - [ ] Real-time rate calculation is missing.
 - [ ] Fraktjakt timeout fallback is missing.
@@ -356,6 +484,8 @@ This file tracks what is already implemented, what is partial, and what still ne
 ### 11. Payments - Klarna
 
 - [ ] Klarna backend payment provider is missing.
+- [~] Klarna integration connector registry + SKIP-state tracking exists in ops module; provider implementation is still missing.
+- [~] Klarna runtime readiness checks and payment session preview endpoints now exist for admin/storefront flows; live payment session creation is still pending.
 - [ ] Klarna API credential management is missing.
 - [ ] Klarna test/production mode config is missing.
 - [ ] Klarna Pay Now, Pay Later, Instalments, B2B Invoice are not production implemented.
@@ -406,14 +536,14 @@ This file tracks what is already implemented, what is partial, and what still ne
 - [~] Medusa and Strapi support events/webhooks at framework level.
 - [~] Custom event contract from the FRD has started through a normalized sync event model.
 - [~] Endpoint registration API routes exist for sync operator use (failed list/replay), but FRD-level endpoint registration UI is still missing.
-- [~] Delivery retry/logs/signature/event filtering are partially started: Strapi secret validation, Medusa + Strapi event intake (including product/variant/category/inventory/pricing events), echo filtering, persisted event logs, idempotency, queue-first retry handling, dead-letter marking, replay endpoints, status/recent observability APIs, configurable worker concurrency, stale-processing lease recovery, and distributed job lease locking exist, but endpoint registration UI and queue-backed horizontal worker scaling are still missing.
+- [~] Delivery retry/logs/signature/event filtering are partially started: Strapi secret validation, Medusa + Strapi event intake (including product/variant/category/inventory/pricing events), echo filtering, persisted event logs, idempotency, queue-first retry handling with per-message ack + visibility timeout recovery, dead-letter marking, replay endpoints, status/recent observability APIs, queue operations endpoints (pause/recover/manual process), mapping reconciliation/conflict endpoints, configurable worker concurrency, stale-processing lease recovery, distributed job lease locking, optional continuous runtime mode, and standalone daemon lifecycle exist, but endpoint registration UI is still missing.
 - [x] Event payload standard is implemented for the first Strapi-to-Medusa webhook slice.
 
 ### 17. Settings And Configuration
 
 - [~] Medusa has native store, region, tax, shipping, API key foundations.
 - [ ] FRD-specific store settings UI is missing.
-- [ ] Swedish VAT presets and EU OSS/reverse-charge workflows are not configured.
+- [~] Swedish VAT/EU reverse-charge runtime decisioning is now available through tax quote preview APIs, but full store settings presets and EU OSS operational workflows are still pending.
 - [ ] Shipping zones with Fraktjakt real-time method are missing.
 - [ ] Email notification settings are missing.
 - [ ] Encrypted external integration credential management is missing.
@@ -439,13 +569,14 @@ This file tracks what is already implemented, what is partial, and what still ne
 
 ### 20. Integrations
 
-- [ ] Fortnox 2-way sync is missing.
+- [~] Fortnox integration connector registry + SKIP-state tracking exists in ops module; 2-way accounting sync implementation is still missing.
 - [ ] Fraktjakt 2-way sync is missing.
+- [~] Integration runtime health checks and SKIP-safe preview endpoints exist for Fraktjakt/Klarna/Fortnox so development can continue before credentials are available.
 - [~] Strapi <-> Medusa 2-way sync foundation has started with webhook validation, normalized event contracts, persisted event logs, mapping storage, Medusa-origin event subscribers, replay operations, and expanded product/variant/category/inventory/pricing sync handlers.
 - [x] Dedicated sync mappings table is implemented through the Medusa `sync` module and migration.
 - [x] Sync events table is implemented through the Medusa `sync` module and migration.
-- [~] Queue-first worker flow is implemented with Redis enqueue/dequeue/requeue, DB polling fallback, configurable per-run concurrency, stale-processing lease recovery, and distributed job lease locking; dedicated long-running worker scaling with stronger per-message visibility-timeout guarantees is still missing.
-- [~] Idempotency and loop prevention helpers have started; conflict handling, dead-letter queue, and reconciliation job are missing.
+- [~] Queue-first worker flow is implemented with Redis enqueue/dequeue/requeue, in-flight processing list, per-message ack, visibility-timeout recovery, DB polling fallback, configurable per-run concurrency, stale-processing lease recovery, distributed job lease locking, optional continuous runtime loop, operator queue controls, standalone daemon lifecycle, and reconciliation/conflict tooling; UI/operator ergonomics are still missing.
+- [~] Idempotency and loop prevention helpers have started; dead-letter handling and reconciliation tooling are implemented, and Medusa-origin webhook echo filtering is now hardened. Remaining loop-prevention enhancement is explicit outbound processed-correlation tracking.
 - [~] Targeted cache invalidation/revalidation is implemented as best-effort webhook trigger after successful product sync; storefront endpoint implementation and delivery observability are still missing.
 
 ## Recommended Development Order
@@ -480,9 +611,9 @@ Goal: implement the most reusable integration layer from the FRD before adding m
 - [x] Create sync event/idempotency storage.
 - [x] Add Medusa subscriber for product/category changes.
 - [x] Add secure Strapi webhook receiver.
-- [~] Add mapping functions for Medusa-to-Strapi and Strapi-to-Medusa ownership rules. Worker execution now exists for product, product-variant (via parent product sync), product-category-linked product sync, and pricing/inventory-linked product sync; additional ownership coverage is still needed for price-list and inventory-reservation edge cases.
+- [~] Add mapping functions for Medusa-to-Strapi and Strapi-to-Medusa ownership rules. Worker execution now exists for product, product-variant (via parent product sync), product-category-linked product sync, inventory/price/price-list/reservation linked product sync, and Strapi product update writes; remaining work is hardening tests and explicit outbound loop-metadata tracking.
 - [~] Add loop prevention metadata. Echo detection exists for webhook events, and ignored echoes are persisted; processed-correlation tracking for outbound writes is not implemented yet.
-- [~] Add retry/dead-letter behavior using Redis-backed queue. Queue-first retry/dead-letter/replay behavior is implemented with configurable per-run concurrency, stale-processing lease recovery, and distributed job lease locking; dedicated long-running worker scaling and stronger per-message visibility-timeout semantics are pending.
+- [~] Add retry/dead-letter behavior using Redis-backed queue. Queue-first retry/dead-letter/replay behavior is implemented with per-message ack, visibility-timeout recovery, configurable per-run concurrency, stale-processing lease recovery, distributed job lease locking, optional continuous runtime loop, operator controls, standalone daemon lifecycle, and reconciliation/conflict tooling; UI ergonomics are pending.
 - [~] Add targeted storefront cache invalidation or revalidation. Best-effort invalidation webhook exists; storefront endpoint and observability are pending.
 - [~] Add sync logs and a minimal admin/debug view. Persistent event logs, replay APIs, and status/recent observability APIs now exist; admin/debug UI is missing.
 
@@ -556,8 +687,8 @@ Goal: make the platform manageable after sales start.
 
 ## Immediate Next Task Recommendation
 
-Continue Phase 2: Medusa/Strapi Sync Foundation.
+Continue Phase 3: Checkout Revenue Path (Fraktjakt + Klarna live execution) while keeping Phase 2/ops stable.
 
-Reason: queue-first processing, observability, concurrency, stale-processing recovery, distributed job lease locking, and core pricing/inventory ownership coverage are in place. The highest-value remaining Phase 2 gap is stronger per-message ack/visibility semantics plus ownership edge-case coverage.
+Reason: backend operations + integration runtime now cover client-request domains (tax records, complaint/return intake, import tracking, integration registry, health checks, preview flows, and SKIP-safe simulation), so the highest-value remaining work is replacing previews with live provider API execution and end-to-end checkout/order automation.
 
-Next concrete slice: add a dedicated long-running queue worker with per-message visibility-timeout/ack semantics, then add sync admin UI and ownership edge-case coverage (price lists/reservations/conflicts).
+Next concrete slice: implement first live provider path (Fraktjakt rate quote API + fallback), then promote Klarna preview route into live payment-session creation, then connect Fortnox export jobs to real API push with retry/error capture.

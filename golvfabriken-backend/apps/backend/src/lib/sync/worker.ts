@@ -4,6 +4,7 @@ import { mapMedusaProductToStrapiEnrichmentInput, mapStrapiEnrichmentToMedusaPro
 import { createStrapiSyncClientFromEnv, isStrapiSyncConfigured } from "./strapi-client";
 import { triggerSyncInvalidation } from "./cache-invalidation";
 import {
+  ackSyncEventIds,
   dequeueSyncEventIds,
   requeueSyncEventIds,
 } from "./queue";
@@ -308,6 +309,20 @@ const resolveProductIdsFromInventoryEntity = async ({
         return level.inventory_item_id as string | undefined;
       })
     );
+  } else if (event.entity_type === "reservation_item") {
+    const { data: reservationItems = [] } = await query.graph({
+      entity: "reservation_items",
+      fields: ["id", "inventory_item_id"],
+      filters: {
+        id: [event.entity_id],
+      },
+    });
+
+    inventoryItemIds = getUniqueIds(
+      reservationItems.map((item: Record<string, unknown>) => {
+        return item.inventory_item_id as string | undefined;
+      })
+    );
   }
 
   if (!inventoryItemIds.length) {
@@ -351,6 +366,20 @@ const resolveProductIdsFromPricingEntity = async ({
       fields: ["id", "price_set_id"],
       filters: {
         id: [event.entity_id],
+      },
+    });
+
+    priceSetIds = getUniqueIds(
+      prices.map((price: Record<string, unknown>) => {
+        return price.price_set_id as string | undefined;
+      })
+    );
+  } else if (event.entity_type === "price_list") {
+    const { data: prices = [] } = await query.graph({
+      entity: "prices",
+      fields: ["id", "price_set_id"],
+      filters: {
+        price_list_id: [event.entity_id],
       },
     });
 
@@ -570,7 +599,9 @@ const processSyncEvent = async ({
 
   if (
     event.source_system === "medusa" &&
-    (event.entity_type === "inventory_item" || event.entity_type === "inventory_level")
+    (event.entity_type === "inventory_item" ||
+      event.entity_type === "inventory_level" ||
+      event.entity_type === "reservation_item")
   ) {
     return await syncMedusaInventoryEntityToStrapi({
       container,
@@ -582,7 +613,9 @@ const processSyncEvent = async ({
 
   if (
     event.source_system === "medusa" &&
-    (event.entity_type === "price_set" || event.entity_type === "price")
+    (event.entity_type === "price_set" ||
+      event.entity_type === "price" ||
+      event.entity_type === "price_list")
   ) {
     return await syncMedusaPricingEntityToStrapi({
       container,
@@ -662,6 +695,7 @@ export const processSyncEventsBatch = async ({
     logger,
     syncModuleService,
     requeueOnRetry: false,
+    ackQueueEvents: false,
   });
 };
 
@@ -691,7 +725,8 @@ export const processSyncEventsFromQueue = async ({
     queuedEventIds
   )) as SyncEventRecord[];
   const eventsById = new Map(events.map((event) => [event.id, event]));
-  const missingCount = queuedEventIds.filter((eventId) => !eventsById.has(eventId)).length;
+  const missingIds = queuedEventIds.filter((eventId) => !eventsById.has(eventId));
+  const missingCount = missingIds.length;
   const orderedEvents = queuedEventIds
     .map((eventId) => eventsById.get(eventId))
     .filter(Boolean) as SyncEventRecord[];
@@ -700,6 +735,7 @@ export const processSyncEventsFromQueue = async ({
     logger.warn(
       `[sync] ${missingCount} queued event id(s) were not found in sync_event table.`
     );
+    await ackSyncEventIds(missingIds);
   }
 
   const summary = await processSyncEventRecords({
@@ -710,6 +746,7 @@ export const processSyncEventsFromQueue = async ({
     logger,
     syncModuleService,
     requeueOnRetry: true,
+    ackQueueEvents: true,
   });
 
   return {
@@ -727,6 +764,7 @@ const processSyncEventRecords = async ({
   logger,
   syncModuleService,
   requeueOnRetry,
+  ackQueueEvents,
 }: {
   container: MedusaContainer;
   events: SyncEventRecord[];
@@ -735,6 +773,7 @@ const processSyncEventRecords = async ({
   logger: any;
   syncModuleService: SyncModuleService;
   requeueOnRetry: boolean;
+  ackQueueEvents: boolean;
 }): Promise<ProcessSyncEventsBatchResult> => {
   const summary: ProcessSyncEventsBatchResult = {
     selected: events.length,
@@ -744,6 +783,7 @@ const processSyncEventRecords = async ({
     skipped: 0,
   };
   const retryQueueIds: string[] = [];
+  const completedQueueIds: string[] = [];
   const normalizedConcurrency = Math.max(1, Math.min(Number(concurrency) || 1, 20));
   const workerCount = Math.min(normalizedConcurrency, events.length || 1);
 
@@ -776,6 +816,10 @@ const processSyncEventRecords = async ({
       } else {
         summary.skipped += 1;
       }
+
+      if (ackQueueEvents) {
+        completedQueueIds.push(event.id);
+      }
     } catch (error) {
       const deadLettered = nextAttempt >= maxAttempts;
       summary.failed += 1;
@@ -798,6 +842,8 @@ const processSyncEventRecords = async ({
 
       if (!deadLettered && requeueOnRetry) {
         retryQueueIds.push(event.id);
+      } else if (ackQueueEvents) {
+        completedQueueIds.push(event.id);
       }
     }
   };
@@ -820,6 +866,10 @@ const processSyncEventRecords = async ({
 
   if (retryQueueIds.length) {
     await requeueSyncEventIds(retryQueueIds);
+  }
+
+  if (ackQueueEvents && completedQueueIds.length) {
+    await ackSyncEventIds(completedQueueIds);
   }
 
   return summary;

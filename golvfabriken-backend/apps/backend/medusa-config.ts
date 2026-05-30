@@ -18,5 +18,8 @@ module.exports = defineConfig({
     {
       resolve: "./src/modules/sync",
     },
+    {
+      resolve: "./src/modules/ops",
+    },
   ],
 })
