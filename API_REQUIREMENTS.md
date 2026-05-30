@@ -23,6 +23,7 @@ When a new key is required, it must be added here first before implementation de
 | `OPS_ADMIN_SECRET` | Ops API security | Protects complaint/return/import/tax/integration admin operation routes | Generate your own strong secret | `golvfabriken-backend/apps/backend/.env` | `src/api/admin/ops/**/*` | Pending |
 | `OPS_INTEGRATION_SIMULATION_MODE` | Local integration preview mode | Enables simulated shipping/payment/accounting preview responses when external API keys are unavailable | Internal toggle (`true`/`false`), default `true` for local development | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, `src/api/admin/ops/**/*`, `src/api/store/checkout/**/*` | Default Available |
 | `OPS_MERCHANT_COUNTRY_CODE` | Tax/VAT preview runtime | Sets merchant country context for reverse-charge decisioning in tax quote preview flows (default `SE`) | Internal configuration (`SE` for Golvfabriken baseline) | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/tax-runtime.ts`, `src/api/admin/ops/tax-configurations/quote-preview/route.ts`, `src/api/store/checkout/tax/quote-preview/route.ts` | Default Available |
+| `OPS_PRIVACY_ANONYMIZE_SALT` | Privacy anonymization workflow | Salt used for deterministic anonymized customer/email identifiers in GDPR privacy request anonymization flow | Internal generated secret value (use a long random string) | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/privacy-runtime.ts`, `src/modules/ops/service.ts`, `src/api/admin/ops/privacy/requests/anonymize/route.ts` | Default Available |
 | `FRAKTJAKT_API_URL` | Fraktjakt shipping integration | Base URL for Fraktjakt API (shipping rates/booking/tracking) | Fraktjakt merchant/integration onboarding docs | `golvfabriken-backend/apps/backend/.env` | Planned integration paths (currently tracked through `ops_integration_connector`) | SKIP (No Key Yet) |
 | `FRAKTJAKT_API_KEY` | Fraktjakt shipping integration | API key/credential used to authenticate Fraktjakt requests | Fraktjakt merchant/integration onboarding portal | `golvfabriken-backend/apps/backend/.env` | Planned integration paths (currently tracked through `ops_integration_connector`) | SKIP (No Key Yet) |
 | `KLARNA_API_BASE_URL` | Klarna payment integration | Klarna API environment base URL (test/prod) | Klarna merchant account and docs | `golvfabriken-backend/apps/backend/.env` | Planned payment provider integration (currently tracked through `ops_integration_connector`) | SKIP (No Key Yet) |
@@ -73,6 +74,7 @@ For local development before Strapi credentials are ready:
 ```env
 OPS_INTEGRATION_SIMULATION_MODE=true
 OPS_MERCHANT_COUNTRY_CODE=SE
+OPS_PRIVACY_ANONYMIZE_SALT=<generate_random_secret>
 SYNC_DISABLE_STRAPI_WRITES=true
 SYNC_JOB_DISABLED=false
 SYNC_JOB_BATCH_SIZE=25
@@ -116,6 +118,7 @@ STRAPI_WEBHOOK_SECRET=<shared_secret>
 
 ## Update Notes
 
+- 2026-05-30: Added audit/privacy/reporting ops phase (`ops_audit_log`, `ops_privacy_request`, privacy export/anonymize routes, and ops summary CSV export). No new external provider key was required; added internal key `OPS_PRIVACY_ANONYMIZE_SALT`.
 - 2026-05-30: Added import execution/report and tax quote preview runtime support. No new external provider key was required; added internal runtime config `OPS_MERCHANT_COUNTRY_CODE`.
 - 2026-05-30: No new API keys were added for the ownership edge-case phase (`price_list` + `reservation_item` handlers).
 - 2026-05-30: Added `OPS_ADMIN_SECRET` and planned Fraktjakt/Klarna/Fortnox credential keys. Marked as `SKIP (No Key Yet)` until integration credentials are provided.

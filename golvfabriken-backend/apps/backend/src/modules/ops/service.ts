@@ -2,6 +2,8 @@ import { MedusaService } from "@medusajs/framework/utils";
 import ComplaintCase from "./models/complaint-case";
 import ImportJob from "./models/import-job";
 import IntegrationConnector from "./models/integration-connector";
+import AuditLog from "./models/audit-log";
+import PrivacyRequest from "./models/privacy-request";
 import ReturnRequestCase from "./models/return-request-case";
 import TaxConfiguration from "./models/tax-configuration";
 import {
@@ -19,6 +21,11 @@ import {
   pickBestTaxConfiguration,
   type TaxQuoteInput,
 } from "../../lib/ops/tax-runtime";
+import {
+  anonymizeEmail,
+  anonymizeIdentifier,
+  normalizeEmail,
+} from "../../lib/ops/privacy-runtime";
 import path from "path";
 import fs from "fs/promises";
 
@@ -38,6 +45,12 @@ type GeneratedOpsModuleService = {
   listIntegrationConnectors: (filters?: any, config?: any) => Promise<any[]>;
   createIntegrationConnectors: (data: any) => Promise<any>;
   updateIntegrationConnectors: (data: any) => Promise<any[]>;
+  listAuditLogs: (filters?: any, config?: any) => Promise<any[]>;
+  createAuditLogs: (data: any) => Promise<any>;
+  updateAuditLogs: (data: any) => Promise<any[]>;
+  listPrivacyRequests: (filters?: any, config?: any) => Promise<any[]>;
+  createPrivacyRequests: (data: any) => Promise<any>;
+  updatePrivacyRequests: (data: any) => Promise<any[]>;
 };
 
 type ComplaintType =
@@ -64,6 +77,14 @@ type ReturnStatus =
   | "closed";
 
 type IntegrationStatus = "planned" | "active" | "paused" | "error" | "skipped";
+type AuditActorType = "admin" | "system" | "storefront" | "integration";
+type PrivacyRequestType = "data_export" | "anonymize" | "erasure";
+type PrivacyRequestStatus =
+  | "requested"
+  | "in_progress"
+  | "completed"
+  | "rejected"
+  | "skipped";
 
 type IntegrationHealthCheckResult = {
   key: string;
@@ -149,7 +170,73 @@ class OpsModuleService extends MedusaService({
   TaxConfiguration,
   ImportJob,
   IntegrationConnector,
+  AuditLog,
+  PrivacyRequest,
 }) {
+  async logAuditEvent(input: {
+    entityType: string;
+    entityId?: string;
+    action: string;
+    actorType?: AuditActorType;
+    actorId?: string;
+    actorEmail?: string;
+    source?: string;
+    beforeState?: Record<string, unknown> | null;
+    afterState?: Record<string, unknown> | null;
+    metadata?: Record<string, unknown>;
+  }) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+
+    return generated.createAuditLogs(
+      withoutUndefined({
+        entity_type: String(input.entityType || "").trim().toLowerCase(),
+        entity_id: input.entityId ? String(input.entityId).trim() : undefined,
+        action: String(input.action || "").trim().toLowerCase(),
+        actor_type: input.actorType || "system",
+        actor_id: input.actorId,
+        actor_email: normalizeEmail(input.actorEmail),
+        source: input.source,
+        before_state: input.beforeState || undefined,
+        after_state: input.afterState || undefined,
+        metadata: input.metadata,
+      })
+    );
+  }
+
+  async getAuditEvents({
+    entityType,
+    entityId,
+    action,
+    actorType,
+    limit = 200,
+  }: {
+    entityType?: string;
+    entityId?: string;
+    action?: string;
+    actorType?: AuditActorType;
+    limit?: number;
+  } = {}) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const take = Math.max(Math.min(Number(limit) || 200, 1000), 1);
+    const items = await generated.listAuditLogs(
+      withoutUndefined({
+        entity_type: entityType ? String(entityType).trim().toLowerCase() : undefined,
+        entity_id: entityId ? String(entityId).trim() : undefined,
+        action: action ? String(action).trim().toLowerCase() : undefined,
+        actor_type: actorType,
+      }),
+      {
+        take: take * 2,
+      }
+    );
+
+    return items
+      .sort((a, b) => {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      })
+      .slice(0, take);
+  }
+
   async createComplaintCase(input: {
     orderId?: string;
     customerId?: string;
@@ -162,8 +249,7 @@ class OpsModuleService extends MedusaService({
     metadata?: Record<string, unknown>;
   }) {
     const generated = this as unknown as GeneratedOpsModuleService;
-
-    return generated.createComplaintCases(
+    const created = await generated.createComplaintCases(
       withoutUndefined({
         reference: normalizeReference("CMP"),
         order_id: input.orderId,
@@ -178,6 +264,27 @@ class OpsModuleService extends MedusaService({
         metadata: input.metadata,
       })
     );
+
+    await this.logAuditEvent({
+      entityType: "complaint_case",
+      entityId: created.id,
+      action: "create",
+      actorType: input.channel === "storefront" ? "storefront" : "admin",
+      actorId: input.customerId,
+      actorEmail: input.customerEmail,
+      source: "ops.service.createComplaintCase",
+      afterState: {
+        reference: created.reference,
+        status: created.status,
+        type: created.type,
+        priority: created.priority,
+      },
+      metadata: {
+        order_id: input.orderId,
+      },
+    });
+
+    return created;
   }
 
   async getComplaintCases({
@@ -245,6 +352,26 @@ class OpsModuleService extends MedusaService({
       }),
     });
 
+    await this.logAuditEvent({
+      entityType: "complaint_case",
+      entityId: updated.id,
+      action: "status_update",
+      actorType: "admin",
+      source: "ops.service.updateComplaintCaseStatus",
+      beforeState: {
+        status: current.status,
+        resolution: current.resolution || null,
+      },
+      afterState: {
+        status: updated.status,
+        resolution: updated.resolution || null,
+      },
+      metadata: {
+        previous_status: current.status,
+        next_status: updated.status,
+      },
+    });
+
     return updated;
   }
 
@@ -258,8 +385,7 @@ class OpsModuleService extends MedusaService({
     metadata?: Record<string, unknown>;
   }) {
     const generated = this as unknown as GeneratedOpsModuleService;
-
-    return generated.createReturnRequestCases(
+    const created = await generated.createReturnRequestCases(
       withoutUndefined({
         order_id: input.orderId,
         complaint_case_id: input.complaintCaseId,
@@ -272,6 +398,26 @@ class OpsModuleService extends MedusaService({
         metadata: input.metadata,
       })
     );
+
+    await this.logAuditEvent({
+      entityType: "return_request_case",
+      entityId: created.id,
+      action: "create",
+      actorType: "storefront",
+      actorId: input.customerId,
+      actorEmail: input.customerEmail,
+      source: "ops.service.createReturnRequestCase",
+      afterState: {
+        status: created.status,
+        reason: created.reason,
+      },
+      metadata: {
+        order_id: input.orderId,
+        complaint_case_id: input.complaintCaseId || null,
+      },
+    });
+
+    return created;
   }
 
   async getReturnRequestCases({
@@ -341,6 +487,26 @@ class OpsModuleService extends MedusaService({
       }),
     });
 
+    await this.logAuditEvent({
+      entityType: "return_request_case",
+      entityId: updated.id,
+      action: "status_update",
+      actorType: "admin",
+      source: "ops.service.updateReturnRequestCaseStatus",
+      beforeState: {
+        status: current.status,
+        notes: current.notes || null,
+      },
+      afterState: {
+        status: updated.status,
+        notes: updated.notes || null,
+      },
+      metadata: {
+        previous_status: current.status,
+        next_status: updated.status,
+      },
+    });
+
     return updated;
   }
 
@@ -380,7 +546,23 @@ class OpsModuleService extends MedusaService({
     });
 
     if (!existing[0]) {
-      return generated.createTaxConfigurations(data);
+      const created = await generated.createTaxConfigurations(data);
+
+      await this.logAuditEvent({
+        entityType: "tax_configuration",
+        entityId: created.id,
+        action: "create",
+        actorType: "admin",
+        source: "ops.service.upsertTaxConfiguration",
+        afterState: {
+          country_code: created.country_code,
+          region_code: created.region_code,
+          vat_rate: created.vat_rate,
+          status: created.status,
+        },
+      });
+
+      return created;
     }
 
     const [updated] = await generated.updateTaxConfigurations({
@@ -388,6 +570,26 @@ class OpsModuleService extends MedusaService({
         id: existing[0].id,
       },
       data,
+    });
+
+    await this.logAuditEvent({
+      entityType: "tax_configuration",
+      entityId: updated.id,
+      action: "update",
+      actorType: "admin",
+      source: "ops.service.upsertTaxConfiguration",
+      beforeState: {
+        country_code: existing[0].country_code,
+        region_code: existing[0].region_code,
+        vat_rate: existing[0].vat_rate,
+        status: existing[0].status,
+      },
+      afterState: {
+        country_code: updated.country_code,
+        region_code: updated.region_code,
+        vat_rate: updated.vat_rate,
+        status: updated.status,
+      },
     });
 
     return updated;
@@ -459,8 +661,7 @@ class OpsModuleService extends MedusaService({
     status?: "queued" | "running" | "completed" | "completed_with_errors" | "failed" | "skipped";
   }) {
     const generated = this as unknown as GeneratedOpsModuleService;
-
-    return generated.createImportJobs(
+    const created = await generated.createImportJobs(
       withoutUndefined({
         job_type: input.jobType || "product_catalog",
         source: input.source || "csv",
@@ -472,6 +673,25 @@ class OpsModuleService extends MedusaService({
         metadata: input.metadata,
       })
     );
+
+    await this.logAuditEvent({
+      entityType: "import_job",
+      entityId: created.id,
+      action: "create",
+      actorType: "admin",
+      actorId: input.requestedBy,
+      source: "ops.service.createImportJob",
+      afterState: {
+        job_type: created.job_type,
+        source: created.source,
+        status: created.status,
+      },
+      metadata: {
+        file_name: created.file_name || null,
+      },
+    });
+
+    return created;
   }
 
   async updateImportJobStatus({
@@ -492,6 +712,13 @@ class OpsModuleService extends MedusaService({
     finishedAt?: string | Date | null;
   }) {
     const generated = this as unknown as GeneratedOpsModuleService;
+    const existingItems = await generated.listImportJobs(
+      {
+        id,
+      },
+      { take: 1 }
+    );
+    const existing = existingItems[0];
     const [updated] = await generated.updateImportJobs({
       selector: {
         id,
@@ -511,6 +738,26 @@ class OpsModuleService extends MedusaService({
             ? new Date()
             : undefined),
       }),
+    });
+
+    await this.logAuditEvent({
+      entityType: "import_job",
+      entityId: updated.id,
+      action: "status_update",
+      actorType: "system",
+      source: "ops.service.updateImportJobStatus",
+      beforeState: existing
+        ? {
+            status: existing.status,
+            processed_count: existing.processed_count,
+            failed_count: existing.failed_count,
+          }
+        : undefined,
+      afterState: {
+        status: updated.status,
+        processed_count: updated.processed_count,
+        failed_count: updated.failed_count,
+      },
     });
 
     return updated;
@@ -748,7 +995,22 @@ class OpsModuleService extends MedusaService({
     });
 
     if (!existing[0]) {
-      return generated.createIntegrationConnectors(data);
+      const created = await generated.createIntegrationConnectors(data);
+
+      await this.logAuditEvent({
+        entityType: "integration_connector",
+        entityId: created.id,
+        action: "create",
+        actorType: "admin",
+        source: "ops.service.registerIntegrationConnector",
+        afterState: {
+          key: created.key,
+          status: created.status,
+          category: created.category,
+        },
+      });
+
+      return created;
     }
 
     const [updated] = await generated.updateIntegrationConnectors({
@@ -756,6 +1018,24 @@ class OpsModuleService extends MedusaService({
         id: existing[0].id,
       },
       data,
+    });
+
+    await this.logAuditEvent({
+      entityType: "integration_connector",
+      entityId: updated.id,
+      action: "update",
+      actorType: "admin",
+      source: "ops.service.registerIntegrationConnector",
+      beforeState: {
+        status: existing[0].status,
+        skip_reason: existing[0].skip_reason || null,
+        base_url: existing[0].base_url || null,
+      },
+      afterState: {
+        status: updated.status,
+        skip_reason: updated.skip_reason || null,
+        base_url: updated.base_url || null,
+      },
     });
 
     return updated;
@@ -788,7 +1068,7 @@ class OpsModuleService extends MedusaService({
     );
 
     if (!existing[0]) {
-      return generated.createIntegrationConnectors({
+      const created = await generated.createIntegrationConnectors({
         key: normalizedKey,
         display_name: normalizedKey,
         category: "other",
@@ -798,6 +1078,21 @@ class OpsModuleService extends MedusaService({
         base_url: baseUrl,
         last_health_check_at: toDate(lastHealthCheckAt) || null,
       });
+
+      await this.logAuditEvent({
+        entityType: "integration_connector",
+        entityId: created.id,
+        action: "status_update",
+        actorType: "system",
+        source: "ops.service.setIntegrationConnectorStatus",
+        afterState: {
+          key: created.key,
+          status: created.status,
+          skip_reason: created.skip_reason || null,
+        },
+      });
+
+      return created;
     }
 
     const [updated] = await generated.updateIntegrationConnectors({
@@ -811,6 +1106,22 @@ class OpsModuleService extends MedusaService({
         base_url: baseUrl,
         last_health_check_at: toDate(lastHealthCheckAt),
       }),
+    });
+
+    await this.logAuditEvent({
+      entityType: "integration_connector",
+      entityId: updated.id,
+      action: "status_update",
+      actorType: "system",
+      source: "ops.service.setIntegrationConnectorStatus",
+      beforeState: {
+        status: existing[0].status,
+        skip_reason: existing[0].skip_reason || null,
+      },
+      afterState: {
+        status: updated.status,
+        skip_reason: updated.skip_reason || null,
+      },
     });
 
     return updated;
@@ -1064,15 +1375,312 @@ class OpsModuleService extends MedusaService({
     };
   }
 
+  async createPrivacyRequest(input: {
+    requestType?: PrivacyRequestType;
+    customerId?: string;
+    customerEmail?: string;
+    requestedBy?: string;
+    notes?: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const created = await generated.createPrivacyRequests(
+      withoutUndefined({
+        request_type: input.requestType || "data_export",
+        status: "requested",
+        customer_id: input.customerId,
+        customer_email: normalizeEmail(input.customerEmail),
+        requested_by: input.requestedBy,
+        notes: input.notes,
+        metadata: input.metadata,
+      })
+    );
+
+    await this.logAuditEvent({
+      entityType: "privacy_request",
+      entityId: created.id,
+      action: "create",
+      actorType: "admin",
+      actorId: input.requestedBy,
+      actorEmail: input.customerEmail,
+      source: "ops.service.createPrivacyRequest",
+      afterState: {
+        request_type: created.request_type,
+        status: created.status,
+      },
+    });
+
+    return created;
+  }
+
+  async getPrivacyRequests({
+    status,
+    requestType,
+    limit = 200,
+  }: {
+    status?: PrivacyRequestStatus;
+    requestType?: PrivacyRequestType;
+    limit?: number;
+  } = {}) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const take = Math.max(Math.min(Number(limit) || 200, 500), 1);
+    const items = await generated.listPrivacyRequests(
+      withoutUndefined({
+        status,
+        request_type: requestType,
+      }),
+      {
+        take: take * 2,
+      }
+    );
+
+    return items
+      .sort((a, b) => {
+        return new Date(b.updated_at || b.created_at).getTime() -
+          new Date(a.updated_at || a.created_at).getTime();
+      })
+      .slice(0, take);
+  }
+
+  async updatePrivacyRequestStatus({
+    id,
+    status,
+    resultSummary,
+    payload,
+  }: {
+    id: string;
+    status: PrivacyRequestStatus;
+    resultSummary?: string;
+    payload?: Record<string, unknown>;
+  }) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const existing = await generated.listPrivacyRequests(
+      {
+        id: String(id || "").trim(),
+      },
+      { take: 1 }
+    );
+    const current = existing[0];
+
+    if (!current) {
+      throw new Error("Privacy request not found");
+    }
+
+    const [updated] = await generated.updatePrivacyRequests({
+      selector: {
+        id: current.id,
+      },
+      data: withoutUndefined({
+        status,
+        result_summary: resultSummary,
+        payload,
+        started_at: status === "in_progress" ? new Date() : undefined,
+        completed_at:
+          status === "completed" || status === "rejected" || status === "skipped"
+            ? new Date()
+            : undefined,
+      }),
+    });
+
+    await this.logAuditEvent({
+      entityType: "privacy_request",
+      entityId: updated.id,
+      action: "status_update",
+      actorType: "admin",
+      source: "ops.service.updatePrivacyRequestStatus",
+      beforeState: {
+        status: current.status,
+      },
+      afterState: {
+        status: updated.status,
+        result_summary: updated.result_summary || null,
+      },
+    });
+
+    return updated;
+  }
+
+  async runPrivacyExport({
+    id,
+  }: {
+    id: string;
+  }) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const requests = await generated.listPrivacyRequests(
+      {
+        id: String(id || "").trim(),
+      },
+      { take: 1 }
+    );
+    const request = requests[0];
+
+    if (!request) {
+      throw new Error("Privacy request not found");
+    }
+
+    await this.updatePrivacyRequestStatus({
+      id: request.id,
+      status: "in_progress",
+    });
+
+    const customerEmail = normalizeEmail(request.customer_email);
+    const customerId = String(request.customer_id || "").trim();
+    const complaintCandidates = await generated.listComplaintCases({}, { take: 5000 });
+    const returnCandidates = await generated.listReturnRequestCases({}, { take: 5000 });
+    const complaints = complaintCandidates.filter((item) => {
+      const sameEmail = customerEmail
+        ? normalizeEmail(item.customer_email) === customerEmail
+        : false;
+      const sameCustomerId = customerId ? String(item.customer_id || "") === customerId : false;
+      return sameEmail || sameCustomerId;
+    });
+    const returns = returnCandidates.filter((item) => {
+      const sameEmail = customerEmail
+        ? normalizeEmail(item.customer_email) === customerEmail
+        : false;
+      const sameCustomerId = customerId ? String(item.customer_id || "") === customerId : false;
+      return sameEmail || sameCustomerId;
+    });
+    const payload = {
+      generated_at: new Date().toISOString(),
+      complaint_count: complaints.length,
+      return_count: returns.length,
+      complaints,
+      returns,
+    };
+    const updated = await this.updatePrivacyRequestStatus({
+      id: request.id,
+      status: "completed",
+      resultSummary: `Export generated with ${complaints.length} complaints and ${returns.length} returns`,
+      payload,
+    });
+
+    return {
+      request: updated,
+      export: payload,
+    };
+  }
+
+  async runPrivacyAnonymize({
+    id,
+    dryRun = true,
+  }: {
+    id: string;
+    dryRun?: boolean;
+  }) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const requests = await generated.listPrivacyRequests(
+      {
+        id: String(id || "").trim(),
+      },
+      { take: 1 }
+    );
+    const request = requests[0];
+
+    if (!request) {
+      throw new Error("Privacy request not found");
+    }
+
+    await this.updatePrivacyRequestStatus({
+      id: request.id,
+      status: "in_progress",
+    });
+
+    const customerEmail = normalizeEmail(request.customer_email);
+    const customerId = String(request.customer_id || "").trim();
+    const complaintCandidates = await generated.listComplaintCases({}, { take: 5000 });
+    const returnCandidates = await generated.listReturnRequestCases({}, { take: 5000 });
+    const complaintTargets = complaintCandidates.filter((item) => {
+      const sameEmail = customerEmail
+        ? normalizeEmail(item.customer_email) === customerEmail
+        : false;
+      const sameCustomerId = customerId ? String(item.customer_id || "") === customerId : false;
+      return sameEmail || sameCustomerId;
+    });
+    const returnTargets = returnCandidates.filter((item) => {
+      const sameEmail = customerEmail
+        ? normalizeEmail(item.customer_email) === customerEmail
+        : false;
+      const sameCustomerId = customerId ? String(item.customer_id || "") === customerId : false;
+      return sameEmail || sameCustomerId;
+    });
+    const anonymizedCustomerId = anonymizeIdentifier(
+      customerId || customerEmail || request.id,
+      "cust"
+    );
+    const anonymizedEmail = anonymizeEmail(customerEmail || request.customer_email || request.id);
+
+    if (!dryRun) {
+      for (const complaint of complaintTargets) {
+        await generated.updateComplaintCases({
+          selector: {
+            id: complaint.id,
+          },
+          data: {
+            customer_id: anonymizedCustomerId,
+            customer_email: anonymizedEmail,
+            metadata: {
+              ...(complaint.metadata || {}),
+              privacy_anonymized: true,
+              privacy_anonymized_at: new Date().toISOString(),
+            },
+          },
+        });
+      }
+
+      for (const returnCase of returnTargets) {
+        await generated.updateReturnRequestCases({
+          selector: {
+            id: returnCase.id,
+          },
+          data: {
+            customer_id: anonymizedCustomerId,
+            customer_email: anonymizedEmail,
+            metadata: {
+              ...(returnCase.metadata || {}),
+              privacy_anonymized: true,
+              privacy_anonymized_at: new Date().toISOString(),
+            },
+          },
+        });
+      }
+    }
+
+    const payload = {
+      dry_run: dryRun,
+      target_counts: {
+        complaints: complaintTargets.length,
+        returns: returnTargets.length,
+      },
+      anonymized_customer_id: anonymizedCustomerId,
+      anonymized_customer_email: anonymizedEmail,
+    };
+    const updated = await this.updatePrivacyRequestStatus({
+      id: request.id,
+      status: dryRun ? "skipped" : "completed",
+      resultSummary: dryRun
+        ? `Dry run: ${complaintTargets.length} complaints and ${returnTargets.length} returns would be anonymized`
+        : `Anonymized ${complaintTargets.length} complaints and ${returnTargets.length} returns`,
+      payload,
+    });
+
+    return {
+      request: updated,
+      anonymization: payload,
+    };
+  }
+
   async getOpsDashboardSummary() {
     const generated = this as unknown as GeneratedOpsModuleService;
-    const [complaints, returns, imports, integrations, taxConfigurations] =
+    const [complaints, returns, imports, integrations, taxConfigurations, auditLogs, privacyRequests] =
       await Promise.all([
         generated.listComplaintCases({}, { take: 2000 }),
         generated.listReturnRequestCases({}, { take: 2000 }),
         generated.listImportJobs({}, { take: 2000 }),
         generated.listIntegrationConnectors({}, { take: 200 }),
         generated.listTaxConfigurations({}, { take: 500 }),
+        generated.listAuditLogs({}, { take: 2000 }),
+        generated.listPrivacyRequests({}, { take: 2000 }),
       ]);
     const integrationRuntime = getAllIntegrationRuntimeReports();
     const statusCount = (items: any[], field: string) => {
@@ -1107,6 +1715,14 @@ class OpsModuleService extends MedusaService({
         total: integrations.length,
         byStatus: statusCount(integrations, "status"),
         runtime: integrationRuntime,
+      },
+      audit_logs: {
+        total: auditLogs.length,
+        byActorType: statusCount(auditLogs, "actor_type"),
+      },
+      privacy_requests: {
+        total: privacyRequests.length,
+        byStatus: statusCount(privacyRequests, "status"),
       },
     };
   }

@@ -21,8 +21,8 @@ This file tracks what is already implemented, what is partial, and what still ne
 
 ## Progress Snapshot
 
-- Overall project progress estimate: **86% complete**.
-- Remaining estimate: **14%**.
+- Overall project progress estimate: **91% complete**.
+- Remaining estimate: **9%**.
 - Highest-impact remaining scope: live Fraktjakt/Klarna/Fortnox provider execution + B2B/account modules + storefront/admin UX surfaces.
 
 ## Development Log
@@ -234,6 +234,36 @@ This file tracks what is already implemented, what is partial, and what still ne
 - [x] Added tax runtime config baseline `OPS_MERCHANT_COUNTRY_CODE=SE` in backend env template.
 - [x] Added unit coverage for tax runtime (`src/lib/ops/__tests__/tax-runtime.unit.spec.ts`).
 - [x] Verified Medusa backend build and unit tests after these additions.
+
+### 2026-05-30 - Phase 3 Continued: Ops Governance And Compliance Foundation
+
+- [x] Added new ops models for audit/activity logs and privacy requests:
+- [x] `ops_audit_log` (entity/action/actor/before/after snapshot),
+- [x] `ops_privacy_request` (request type/status/export/anonymize payload).
+- [x] Added migration `Migration20260530120000` for audit/privacy tables and indexes.
+- [x] Added ops service coverage for:
+- [x] append-only audit log writes on complaint/return/tax/import/integration changes,
+- [x] privacy request create/list/status,
+- [x] privacy export preview workflow,
+- [x] privacy anonymize workflow (dry-run by default, apply mode optional).
+- [x] Added admin endpoints:
+- [x] `GET /admin/ops/audit`,
+- [x] `GET /admin/ops/audit/export` (CSV),
+- [x] `GET/POST /admin/ops/privacy/requests`,
+- [x] `POST /admin/ops/privacy/requests/status`,
+- [x] `POST /admin/ops/privacy/requests/export-preview`,
+- [x] `POST /admin/ops/privacy/requests/anonymize`,
+- [x] `GET /admin/ops/reports/summary`,
+- [x] `GET /admin/ops/reports/summary/export` (CSV).
+- [x] Added storefront privacy intake endpoint:
+- [x] `POST /store/support/privacy/requests`.
+- [x] Expanded dashboard summary with audit log and privacy request counters.
+- [x] Added helper libraries + tests:
+- [x] `src/lib/ops/privacy-runtime.ts`,
+- [x] `src/lib/ops/reports.ts`,
+- [x] unit tests for privacy and report helpers.
+- [x] Added internal config key `OPS_PRIVACY_ANONYMIZE_SALT`.
+- [x] Verified Medusa backend build and unit tests after governance/compliance additions.
 
 ### 2026-05-29 - Phase 2 Continued: Distributed Job Lease Lock
 
@@ -514,7 +544,7 @@ This file tracks what is already implemented, what is partial, and what still ne
 - [ ] Sales dashboard is missing.
 - [ ] Inventory reports are missing.
 - [ ] Logistics reports are missing.
-- [ ] CSV export for reports is missing.
+- [~] Ops summary CSV export endpoint now exists (`GET /admin/ops/reports/summary/export`), but full business report coverage is still missing.
 - [ ] Scheduled reports are missing.
 - [ ] GA4 ecommerce events are missing.
 - [ ] Meta Pixel is missing.
@@ -525,8 +555,8 @@ This file tracks what is already implemented, what is partial, and what still ne
 - [ ] Cookie consent banner is missing.
 - [ ] Consent version/timestamp storage is missing.
 - [ ] Privacy policy CMS page is missing.
-- [ ] Customer data export is missing.
-- [ ] Right-to-erasure anonymisation is missing.
+- [~] Customer data export preview workflow now exists through privacy requests (`POST /admin/ops/privacy/requests/export-preview`), but full customer-domain export coverage is still pending.
+- [~] Right-to-erasure anonymisation workflow is now partially implemented through privacy requests (`POST /admin/ops/privacy/requests/anonymize`, dry-run + apply), but broader domain-level anonymisation is still pending.
 - [ ] Retention policy automation is missing.
 - [ ] B2B DPA content flow is missing.
 - [ ] Breach notification logging is missing.
@@ -550,9 +580,9 @@ This file tracks what is already implemented, what is partial, and what still ne
 
 ### 18. Audit And Activity Log
 
-- [ ] Append-only audit log module is missing.
-- [ ] Before/after state snapshots are missing.
-- [ ] Audit CSV export is missing.
+- [~] Append-only audit log module foundation now exists (`ops_audit_log` + `GET /admin/ops/audit`), but UI and cross-domain coverage are still pending.
+- [~] Before/after snapshots are now captured for key ops workflows (complaint/return/tax/import/integration mutations), but broader platform coverage is still pending.
+- [x] Audit CSV export endpoint is implemented (`GET /admin/ops/audit/export`).
 - [ ] Immutable retention policy is missing.
 
 ### 19. Non-Functional Requirements

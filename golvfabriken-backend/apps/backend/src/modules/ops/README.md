@@ -7,6 +7,9 @@ This module provides backend foundations for:
 - Return request lifecycle tracking
 - Import job tracking
 - Integration connector registry and SKIP-state tracking
+- Audit/activity log foundation
+- Privacy request workflow (export/anonymize)
+- Ops summary reporting + CSV export
 
 ## Admin Security
 
@@ -30,6 +33,8 @@ GET/POST /admin/ops/complaints
 POST     /admin/ops/complaints/status
 GET/POST /admin/ops/returns
 POST     /admin/ops/returns/status
+GET      /admin/ops/audit
+GET      /admin/ops/audit/export
 GET/POST /admin/ops/tax-configurations
 POST     /admin/ops/tax-configurations/quote-preview
 GET/POST /admin/ops/imports
@@ -37,11 +42,17 @@ POST     /admin/ops/imports/status
 POST     /admin/ops/imports/product-catalog/validate
 POST     /admin/ops/imports/product-catalog/execute
 GET      /admin/ops/imports/product-catalog/report?job_id=<impjob_id>
+GET/POST /admin/ops/privacy/requests
+POST     /admin/ops/privacy/requests/status
+POST     /admin/ops/privacy/requests/export-preview
+POST     /admin/ops/privacy/requests/anonymize
 GET/POST /admin/ops/integrations
 POST     /admin/ops/integrations/status
 POST     /admin/ops/integrations/bootstrap
 POST     /admin/ops/integrations/health-check
 GET      /admin/ops/dashboard/status
+GET      /admin/ops/reports/summary
+GET      /admin/ops/reports/summary/export
 POST     /admin/ops/shipping/quote-preview
 POST     /admin/ops/payments/klarna/session-preview
 GET/POST /admin/ops/accounting/fortnox/exports
@@ -54,6 +65,7 @@ POST /store/support/complaints
 GET  /store/support/complaints/status
 POST /store/support/returns
 GET  /store/support/returns/status
+POST /store/support/privacy/requests
 POST /store/checkout/shipping/quote-preview
 POST /store/checkout/payments/klarna/session-preview
 POST /store/checkout/tax/quote-preview
