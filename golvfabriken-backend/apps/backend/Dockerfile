@@ -20,6 +20,11 @@ COPY --from=deps /workspace/node_modules ./node_modules
 COPY --from=deps /workspace/apps/backend/node_modules ./apps/backend/node_modules
 COPY . .
 WORKDIR /workspace/apps/backend
+# medusa-config.ts reads these at build-time via loadEnv; provide placeholder values so
+# `medusa build` does not crash when real env vars are absent from the build environment.
+ENV STORE_CORS="http://localhost:8000" \
+    ADMIN_CORS="http://localhost:9000" \
+    AUTH_CORS="http://localhost:8000,http://localhost:9000"
 RUN npx medusa build
 
 # ---------- 3. runtime ----------
@@ -31,10 +36,13 @@ ENV NODE_ENV=production \
     PORT=9000 \
     MEDUSA_WORKER_MODE=server
 
-COPY --from=build /workspace/apps/backend/.medusa/server ./
-# Medusa 2.14.x's .medusa/server package.json has inconsistent React peer deps
-# (icons wants 19, dashboard wants 18) — legacy-peer-deps is the canonical workaround.
-RUN npm install --omit=dev --legacy-peer-deps --no-audit --no-fund
+COPY --from=build /workspace/apps/backend/package.json ./package.json
+COPY --from=build /workspace/apps/backend/medusa-config.* ./
+COPY --from=build /workspace/apps/backend/.medusa ./.medusa
+COPY --from=build /workspace/apps/backend/node_modules ./node_modules
+# Remove dev dependencies; legacy-peer-deps handles the React peer-dep conflict in
+# Medusa 2.14.x (icons wants React 19, dashboard wants React 18).
+RUN npm prune --omit=dev --legacy-peer-deps
 
 EXPOSE 9000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
