@@ -67,6 +67,12 @@ export const queryKeys = {
     options: (cartId: string, regionId?: string) =>
       createDynamicKey("shipping", "options", cartId, regionId),
   },
+
+  custom: {
+    ...createDomainKeys("custom"),
+    detail: (key: string, ...params: unknown[]) =>
+      createDynamicKey("custom", key, ...params),
+  },
 } as const
 
 export type QueryKeys = typeof queryKeys

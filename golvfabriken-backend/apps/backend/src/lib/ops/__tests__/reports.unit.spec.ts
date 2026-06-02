@@ -8,6 +8,12 @@ describe("ops reports helpers", () => {
       imports: { total: 3, byStatus: { completed: 2, failed: 1 } },
       tax_configurations: { total: 1, byStatus: { active: 1 } },
       integrations: { total: 2, byStatus: { active: 1, skipped: 1 } },
+      b2b: {
+        companies: { total: 1, byStatus: { active: 1 } },
+        users: { total: 2, byStatus: { active: 2 } },
+        approvals: { total: 1, byStatus: { pending: 1 } },
+        quotes: { total: 1, byStatus: { requested: 1 } },
+      },
     });
 
     expect(rows.length).toBeGreaterThan(5);
@@ -23,6 +29,12 @@ describe("ops reports helpers", () => {
       imports: { total: 0, byStatus: {} },
       tax_configurations: { total: 0, byStatus: {} },
       integrations: { total: 0, byStatus: {} },
+      b2b: {
+        companies: { total: 0, byStatus: {} },
+        users: { total: 0, byStatus: {} },
+        approvals: { total: 0, byStatus: {} },
+        quotes: { total: 0, byStatus: {} },
+      },
     });
 
     expect(csv.startsWith("section,metric,value")).toBe(true);

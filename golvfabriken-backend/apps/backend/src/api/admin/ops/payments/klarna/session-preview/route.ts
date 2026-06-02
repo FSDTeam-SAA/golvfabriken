@@ -1,8 +1,6 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import {
-  buildKlarnaSessionPreview,
-  getIntegrationRuntimeReport,
-  isOpsIntegrationSimulationEnabled,
+  resolveKlarnaSession,
 } from "../../../../../../lib/ops/integration-runtime";
 import { validateOpsAdminSecret } from "../../../utils/admin-auth";
 
@@ -36,28 +34,27 @@ export async function POST(
     return;
   }
 
-  const runtime = getIntegrationRuntimeReport("klarna");
-  const simulationEnabled = isOpsIntegrationSimulationEnabled();
-
-  if (!runtime.ready && !simulationEnabled) {
-    res.status(412).json({
-      status: "skip",
-      reason: runtime.skipReason,
-      missing_keys: runtime.missingKeys,
-    });
-    return;
-  }
-
-  const session = buildKlarnaSessionPreview({
+  const result = await resolveKlarnaSession({
     amount,
     currency_code: payload.currency_code,
     locale: payload.locale,
     order_reference: payload.order_reference,
   });
 
+  if (result.mode === "skip") {
+    res.status(412).json({
+      status: "skip",
+      reason: result.note || result.runtime.skipReason,
+      missing_keys: result.runtime.missingKeys,
+      runtime: result.runtime,
+    });
+    return;
+  }
+
   res.status(200).json({
-    status: runtime.ready ? "live_ready_preview" : "skip_preview",
-    runtime,
-    session,
+    status: result.mode === "live" ? "live" : "fallback_preview",
+    runtime: result.runtime,
+    note: result.note,
+    session: result.session,
   });
 }

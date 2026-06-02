@@ -1,6 +1,6 @@
 # API Requirements And Credential Tracker
 
-Last updated: 2026-05-30
+Last updated: 2026-05-31
 
 Use this file as the single source of truth for all external credentials and integration keys.
 When a new key is required, it must be added here first before implementation depends on it.
@@ -26,9 +26,27 @@ When a new key is required, it must be added here first before implementation de
 | `OPS_PRIVACY_ANONYMIZE_SALT` | Privacy anonymization workflow | Salt used for deterministic anonymized customer/email identifiers in GDPR privacy request anonymization flow | Internal generated secret value (use a long random string) | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/privacy-runtime.ts`, `src/modules/ops/service.ts`, `src/api/admin/ops/privacy/requests/anonymize/route.ts` | Default Available |
 | `FRAKTJAKT_API_URL` | Fraktjakt shipping integration | Base URL for Fraktjakt API (shipping rates/booking/tracking) | Fraktjakt merchant/integration onboarding docs | `golvfabriken-backend/apps/backend/.env` | Planned integration paths (currently tracked through `ops_integration_connector`) | SKIP (No Key Yet) |
 | `FRAKTJAKT_API_KEY` | Fraktjakt shipping integration | API key/credential used to authenticate Fraktjakt requests | Fraktjakt merchant/integration onboarding portal | `golvfabriken-backend/apps/backend/.env` | Planned integration paths (currently tracked through `ops_integration_connector`) | SKIP (No Key Yet) |
+| `FRAKTJAKT_RATE_PATH` | Fraktjakt rate quote endpoint path | Relative API path used for live shipping quote requests | Fraktjakt API documentation for your account | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, shipping quote endpoints | Default Available |
+| `FRAKTJAKT_RATE_TIMEOUT_MS` | Fraktjakt live request timeout | Timeout (ms) before shipping quote call falls back to simulation/skip behavior | Internal configuration, recommended `4000` | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, shipping quote endpoints | Default Available |
+| `FRAKTJAKT_BOOKING_PATH` | Fraktjakt shipment booking endpoint path | Relative API path used for shipment booking after checkout | Fraktjakt API documentation for your account | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, shipping booking endpoints | Default Available |
+| `FRAKTJAKT_BOOKING_TIMEOUT_MS` | Fraktjakt booking request timeout | Timeout (ms) before booking call falls back to simulation/skip behavior | Internal configuration, recommended `5000` | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, shipping booking endpoints | Default Available |
+| `FRAKTJAKT_LABEL_PATH` | Fraktjakt label endpoint path | Relative API path template for label generation (`{shipment_id}` placeholder) | Fraktjakt API documentation for your account | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, shipping label endpoints | Default Available |
+| `FRAKTJAKT_LABEL_TIMEOUT_MS` | Fraktjakt label request timeout | Timeout (ms) before label call falls back to simulation/skip behavior | Internal configuration, recommended `5000` | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, shipping label endpoints | Default Available |
+| `FRAKTJAKT_TRACKING_PATH` | Fraktjakt tracking endpoint path | Relative API path template for shipment tracking (`{shipment_id}` placeholder) | Fraktjakt API documentation for your account | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, shipping tracking endpoints | Default Available |
+| `FRAKTJAKT_TRACKING_TIMEOUT_MS` | Fraktjakt tracking request timeout | Timeout (ms) before tracking call falls back to simulation/skip behavior | Internal configuration, recommended `4000` | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, shipping tracking endpoints | Default Available |
+| `FRAKTJAKT_ADDRESS_VALIDATE_PATH` | Fraktjakt address validation endpoint path | Relative API path used to validate/normalize shipping address before booking | Fraktjakt API documentation for your account | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, shipping address-validate endpoints | Default Available |
+| `FRAKTJAKT_ADDRESS_VALIDATE_TIMEOUT_MS` | Fraktjakt address validation timeout | Timeout (ms) before address validation call falls back to simulation/skip behavior | Internal configuration, recommended `3000` | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, shipping address-validate endpoints | Default Available |
 | `KLARNA_API_BASE_URL` | Klarna payment integration | Klarna API environment base URL (test/prod) | Klarna merchant account and docs | `golvfabriken-backend/apps/backend/.env` | Planned payment provider integration (currently tracked through `ops_integration_connector`) | SKIP (No Key Yet) |
 | `KLARNA_USERNAME` | Klarna payment integration | Klarna API username for server-side API auth | Klarna merchant portal (API credentials) | `golvfabriken-backend/apps/backend/.env` | Planned payment provider integration (currently tracked through `ops_integration_connector`) | SKIP (No Key Yet) |
 | `KLARNA_PASSWORD` | Klarna payment integration | Klarna API password/secret for server-side API auth | Klarna merchant portal (API credentials) | `golvfabriken-backend/apps/backend/.env` | Planned payment provider integration (currently tracked through `ops_integration_connector`) | SKIP (No Key Yet) |
+| `KLARNA_SESSION_PATH` | Klarna session endpoint path | Relative API path used for live payment session creation | Klarna payments API docs (`/payments/v1/sessions` default) | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, klarna session endpoints | Default Available |
+| `KLARNA_SESSION_TIMEOUT_MS` | Klarna live request timeout | Timeout (ms) before Klarna session call falls back to simulation/skip behavior | Internal configuration, recommended `5000` | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, klarna session endpoints | Default Available |
+| `KLARNA_ORDER_CREATE_PATH` | Klarna order creation endpoint path | Relative API path template for order creation from authorization (`{authorization_token}` placeholder) | Klarna payments API docs | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, klarna order endpoints | Default Available |
+| `KLARNA_ORDER_TIMEOUT_MS` | Klarna order creation request timeout | Timeout (ms) before order creation call falls back to simulation/skip behavior | Internal configuration, recommended `6000` | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, klarna order endpoints | Default Available |
+| `KLARNA_CAPTURE_PATH` | Klarna capture endpoint path | Relative API path template for capture actions (`{order_id}` placeholder) | Klarna order management API docs | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, klarna capture endpoints | Default Available |
+| `KLARNA_CAPTURE_TIMEOUT_MS` | Klarna capture request timeout | Timeout (ms) before capture call falls back to simulation/skip behavior | Internal configuration, recommended `6000` | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, klarna capture endpoints | Default Available |
+| `KLARNA_REFUND_PATH` | Klarna refund endpoint path | Relative API path template for refund actions (`{order_id}` placeholder) | Klarna order management API docs | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, klarna refund endpoints | Default Available |
+| `KLARNA_REFUND_TIMEOUT_MS` | Klarna refund request timeout | Timeout (ms) before refund call falls back to simulation/skip behavior | Internal configuration, recommended `6000` | `golvfabriken-backend/apps/backend/.env` | `src/lib/ops/integration-runtime.ts`, klarna refund endpoints | Default Available |
 | `FORTNOX_API_BASE_URL` | Fortnox accounting integration | Base URL for Fortnox APIs | Fortnox developer docs | `golvfabriken-backend/apps/backend/.env` | Planned accounting sync integration (currently tracked through `ops_integration_connector`) | SKIP (No Key Yet) |
 | `FORTNOX_CLIENT_ID` | Fortnox accounting integration | OAuth client ID for Fortnox app authorization | Fortnox developer portal | `golvfabriken-backend/apps/backend/.env` | Planned accounting sync integration (currently tracked through `ops_integration_connector`) | SKIP (No Key Yet) |
 | `FORTNOX_CLIENT_SECRET` | Fortnox accounting integration | OAuth client secret for Fortnox app authorization | Fortnox developer portal | `golvfabriken-backend/apps/backend/.env` | Planned accounting sync integration (currently tracked through `ops_integration_connector`) | SKIP (No Key Yet) |
@@ -75,6 +93,24 @@ For local development before Strapi credentials are ready:
 OPS_INTEGRATION_SIMULATION_MODE=true
 OPS_MERCHANT_COUNTRY_CODE=SE
 OPS_PRIVACY_ANONYMIZE_SALT=<generate_random_secret>
+FRAKTJAKT_RATE_PATH=/shipping/v1/quotes
+FRAKTJAKT_RATE_TIMEOUT_MS=4000
+FRAKTJAKT_BOOKING_PATH=/shipping/v1/bookings
+FRAKTJAKT_BOOKING_TIMEOUT_MS=5000
+FRAKTJAKT_LABEL_PATH=/shipping/v1/shipments/{shipment_id}/label
+FRAKTJAKT_LABEL_TIMEOUT_MS=5000
+FRAKTJAKT_TRACKING_PATH=/shipping/v1/shipments/{shipment_id}/tracking
+FRAKTJAKT_TRACKING_TIMEOUT_MS=4000
+FRAKTJAKT_ADDRESS_VALIDATE_PATH=/shipping/v1/address/validate
+FRAKTJAKT_ADDRESS_VALIDATE_TIMEOUT_MS=3000
+KLARNA_SESSION_PATH=/payments/v1/sessions
+KLARNA_SESSION_TIMEOUT_MS=5000
+KLARNA_ORDER_CREATE_PATH=/payments/v1/authorizations/{authorization_token}/order
+KLARNA_ORDER_TIMEOUT_MS=6000
+KLARNA_CAPTURE_PATH=/ordermanagement/v1/orders/{order_id}/captures
+KLARNA_CAPTURE_TIMEOUT_MS=6000
+KLARNA_REFUND_PATH=/ordermanagement/v1/orders/{order_id}/refunds
+KLARNA_REFUND_TIMEOUT_MS=6000
 SYNC_DISABLE_STRAPI_WRITES=true
 SYNC_JOB_DISABLED=false
 SYNC_JOB_BATCH_SIZE=25
@@ -118,6 +154,12 @@ STRAPI_WEBHOOK_SECRET=<shared_secret>
 
 ## Update Notes
 
+- 2026-05-31: Added B2B checkout context endpoint (`/store/b2b/checkout/context`) and storefront depot-dropdown/context-sync wiring. No new external API key required.
+- 2026-05-31: Added storefront B2B approval-gate orchestration (checkout approval submit + payment method filtering policy via cart metadata). No new external API key required.
+- 2026-05-31: Added backend flooring coverage/m2 calculation APIs (`/store/checkout/flooring/coverage`, `/admin/ops/flooring/coverage`) and checkout delivery-step address-validation wiring. No new external API key required.
+- 2026-05-31: Added Fraktjakt address validation runtime + endpoints (`/admin/ops/shipping/address-validate`, `/store/checkout/shipping/address-validate`) and related env path/timeout keys.
+- 2026-05-31: Added live-ready Fraktjakt and Klarna runtime execution with timeout + simulation fallback behavior. No new external provider key was required; added endpoint-path and timeout configs.
+- 2026-05-31: Added B2B backend foundation (company/user/approval/RFQ module and routes). No new external provider API key was required for this phase.
 - 2026-05-30: Added audit/privacy/reporting ops phase (`ops_audit_log`, `ops_privacy_request`, privacy export/anonymize routes, and ops summary CSV export). No new external provider key was required; added internal key `OPS_PRIVACY_ANONYMIZE_SALT`.
 - 2026-05-30: Added import execution/report and tax quote preview runtime support. No new external provider key was required; added internal runtime config `OPS_MERCHANT_COUNTRY_CODE`.
 - 2026-05-30: No new API keys were added for the ownership edge-case phase (`price_list` + `reservation_item` handlers).

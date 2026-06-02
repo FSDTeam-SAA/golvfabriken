@@ -10,24 +10,54 @@ import { useTranslation } from "@/lib/hooks/use-translation"
 type PaymentButtonProps = {
   cart: HttpTypes.StoreCart;
   className?: string;
+  requireTermsAccepted?: boolean;
+  termsAccepted?: boolean;
+  forceDisabled?: boolean;
+  disabledMessage?: string;
 };
 
-const PaymentButton = ({ cart, className }: PaymentButtonProps) => {
+const PaymentButton = ({
+  cart,
+  className,
+  requireTermsAccepted = false,
+  termsAccepted = true,
+  forceDisabled = false,
+  disabledMessage,
+}: PaymentButtonProps) => {
   const { t } = useTranslation()
+  const termsGateMissing = requireTermsAccepted && !termsAccepted
   const notReady =
     !cart ||
     !cart.shipping_address ||
     !cart.billing_address ||
     !cart.email ||
-    (cart.shipping_methods?.length ?? 0) < 1
+    (cart.shipping_methods?.length ?? 0) < 1 ||
+    termsGateMissing ||
+    forceDisabled
 
   const paymentSession = cart.payment_collection?.payment_sessions?.[0]
 
   switch (true) {
     case isStripe(paymentSession?.provider_id):
-      return <StripePaymentButton notReady={notReady} className={className} />
+      return (
+        <StripePaymentButton
+          notReady={notReady}
+          className={className}
+          termsGateMissing={termsGateMissing}
+          forceDisabled={forceDisabled}
+          disabledMessage={disabledMessage}
+        />
+      )
     case isManual(paymentSession?.provider_id):
-      return <ManualPaymentButton notReady={notReady} className={className} />
+      return (
+        <ManualPaymentButton
+          notReady={notReady}
+          className={className}
+          termsGateMissing={termsGateMissing}
+          forceDisabled={forceDisabled}
+          disabledMessage={disabledMessage}
+        />
+      )
     default:
       return <Button disabled>{t('checkout.selectPaymentMethod')}</Button>
   }
@@ -36,9 +66,15 @@ const PaymentButton = ({ cart, className }: PaymentButtonProps) => {
 const StripePaymentButton = ({
   notReady,
   className,
+  termsGateMissing = false,
+  forceDisabled = false,
+  disabledMessage,
 }: {
   notReady: boolean;
   className?: string;
+  termsGateMissing?: boolean;
+  forceDisabled?: boolean;
+  disabledMessage?: string;
 }) => {
   const { t } = useTranslation()
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -77,6 +113,16 @@ const StripePaymentButton = ({
       >
         {t('checkout.placeOrder')}
       </Button>
+      {termsGateMissing && (
+        <div className="text-zinc-600 text-sm mt-2">
+          Please accept the purchase terms before placing your order.
+        </div>
+      )}
+      {forceDisabled && disabledMessage && (
+        <div className="text-zinc-600 text-sm mt-2">
+          {disabledMessage}
+        </div>
+      )}
       {errorMessage && (
         <div className="text-red-500 text-sm mt-2">{errorMessage}</div>
       )}
@@ -87,9 +133,15 @@ const StripePaymentButton = ({
 const ManualPaymentButton = ({
   notReady,
   className,
+  termsGateMissing = false,
+  forceDisabled = false,
+  disabledMessage,
 }: {
   notReady: boolean;
   className?: string;
+  termsGateMissing?: boolean;
+  forceDisabled?: boolean;
+  disabledMessage?: string;
 }) => {
   const { t } = useTranslation()
   const [submitting, setSubmitting] = useState(false)
@@ -130,6 +182,16 @@ const ManualPaymentButton = ({
       >
         {t('checkout.placeOrder')}
       </Button>
+      {termsGateMissing && (
+        <div className="text-zinc-600 text-sm mt-2">
+          Please accept the purchase terms before placing your order.
+        </div>
+      )}
+      {forceDisabled && disabledMessage && (
+        <div className="text-zinc-600 text-sm mt-2">
+          {disabledMessage}
+        </div>
+      )}
       {errorMessage && (
         <div className="text-red-500 text-sm mt-2">{errorMessage}</div>
       )}

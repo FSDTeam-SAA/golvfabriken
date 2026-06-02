@@ -48,6 +48,34 @@ export const buildOpsSummaryRows = (summary: any) => {
   rows.push(
     ...flattenStatusMap("integrations", summary?.integrations?.byStatus, summary?.integrations?.total)
   );
+  rows.push(
+    ...flattenStatusMap(
+      "b2b_companies",
+      summary?.b2b?.companies?.byStatus,
+      summary?.b2b?.companies?.total
+    )
+  );
+  rows.push(
+    ...flattenStatusMap(
+      "b2b_users",
+      summary?.b2b?.users?.byStatus,
+      summary?.b2b?.users?.total
+    )
+  );
+  rows.push(
+    ...flattenStatusMap(
+      "b2b_approvals",
+      summary?.b2b?.approvals?.byStatus,
+      summary?.b2b?.approvals?.total
+    )
+  );
+  rows.push(
+    ...flattenStatusMap(
+      "b2b_quotes",
+      summary?.b2b?.quotes?.byStatus,
+      summary?.b2b?.quotes?.total
+    )
+  );
 
   return rows;
 };

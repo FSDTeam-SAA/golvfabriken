@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { getPackagesNeeded, PackagesNeededOutput } from "@/lib/utils/packages-needed"
+import { useFlooringCoverageQuote } from "@/lib/hooks/use-checkout"
 
 interface M2CalculatorProps {
   m2PerPackage: number | null // From product/variant metadata
@@ -47,6 +48,8 @@ export function M2Calculator({
   className = "",
 }: M2CalculatorProps) {
   const { t } = useTranslation()
+  const flooringCoverageMutation = useFlooringCoverageQuote()
+  const requestCoverage = flooringCoverageMutation.mutateAsync
   
   // Mode state
   const [mode, setMode] = useState<CalculatorMode>('direct')
@@ -70,24 +73,71 @@ export function M2Calculator({
 
   // Recalculate whenever inputs change
   useEffect(() => {
+    let active = true
+
     if (!isCalculatorEnabled) {
       setCalculation(null)
       return
     }
 
-    const result = getPackagesNeeded({
+    const fallbackResult = getPackagesNeeded({
       desiredM2,
       m2PerPackage,
       wastePercentage,
     })
 
-    setCalculation(result)
+    const useFallback = () => {
+      if (!active) {
+        return
+      }
 
-    // Update parent quantity field if calculation is valid
-    if (result?.isValid && result.packagesNeeded > 0) {
-      onQuantityChange(result.packagesNeeded)
+      setCalculation(fallbackResult)
+      if (fallbackResult?.isValid && fallbackResult.packagesNeeded > 0) {
+        onQuantityChange(fallbackResult.packagesNeeded)
+      }
     }
-  }, [desiredM2, wastePercentage, m2PerPackage, onQuantityChange, isCalculatorEnabled])
+
+    if (!fallbackResult?.isValid || !desiredM2 || !m2PerPackage) {
+      useFallback()
+      return
+    }
+
+    requestCoverage({
+        desired_m2: desiredM2,
+        m2_per_package: m2PerPackage,
+        waste_pct: wastePercentage,
+      })
+      .then((response) => {
+        if (!active) {
+          return
+        }
+
+        const apiResult = response?.result
+        if (apiResult?.is_valid) {
+          const normalized: PackagesNeededOutput = {
+            desiredM2: apiResult.desired_m2,
+            wastePercentage: apiResult.waste_pct,
+            totalM2WithWaste: apiResult.total_m2_with_waste,
+            packagesNeeded: apiResult.packages_needed,
+            isValid: true,
+          }
+          setCalculation(normalized)
+          if (normalized.packagesNeeded > 0) {
+            onQuantityChange(normalized.packagesNeeded)
+          }
+          return
+        }
+
+        useFallback()
+      })
+      .catch(() => {
+        useFallback()
+      })
+
+    return () => {
+      active = false
+    }
+  }, [desiredM2, wastePercentage, m2PerPackage, onQuantityChange, isCalculatorEnabled, requestCoverage])
 
   useEffect(() => {
     setWastePercentage(getValidWastePercentage(defaultWastePercentage))

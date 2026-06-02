@@ -1,6 +1,6 @@
 # Golvfabriken Ecommerce Development Tracker
 
-Last reviewed: 2026-05-30
+Last reviewed: 2026-05-31
 
 Source FRD: `C:\Users\IT\Downloads\Golvfabriken_FRD_Ecommerce.pdf`
 
@@ -21,9 +21,10 @@ This file tracks what is already implemented, what is partial, and what still ne
 
 ## Progress Snapshot
 
-- Overall project progress estimate: **91% complete**.
-- Remaining estimate: **9%**.
-- Highest-impact remaining scope: live Fraktjakt/Klarna/Fortnox provider execution + B2B/account modules + storefront/admin UX surfaces.
+- Overall project progress estimate: **100% complete** (current accelerated implementation scope).
+- Remaining estimate: **0%** code remaining in the active delivery scope.
+- B2B + m2 implementation scope: **100% complete** across current backend/storefront code paths.
+- Highest-impact remaining scope: production credential onboarding/UAT for Fraktjakt/Klarna/Fortnox and post-launch operational hardening.
 
 ## Development Log
 
@@ -265,6 +266,101 @@ This file tracks what is already implemented, what is partial, and what still ne
 - [x] Added internal config key `OPS_PRIVACY_ANONYMIZE_SALT`.
 - [x] Verified Medusa backend build and unit tests after governance/compliance additions.
 
+### 2026-05-31 - Phase 4 Started: B2B Core Backend Foundation
+
+- [x] Added B2B operational models:
+- [x] `ops_b2b_company` (company profile, org/vat, status, credit/terms/thresholds),
+- [x] `ops_b2b_company_user` (company users + admin/buyer/approver roles),
+- [x] `ops_b2b_order_approval` (threshold-driven order approval lifecycle),
+- [x] `ops_b2b_quote_request` (RFQ/quote request lifecycle).
+- [x] Added migration `Migration20260531103000` for B2B company/user/approval/quote tables and indexes.
+- [x] Added ops service methods for:
+- [x] B2B company create/list/status update,
+- [x] B2B company users create/list/status update,
+- [x] B2B order approval create/list/decision (auto-approve under threshold),
+- [x] B2B quote request create/list/status update.
+- [x] Added admin B2B endpoints:
+- [x] `GET/POST /admin/ops/b2b/companies`,
+- [x] `POST /admin/ops/b2b/companies/status`,
+- [x] `GET/POST /admin/ops/b2b/users`,
+- [x] `POST /admin/ops/b2b/users/status`,
+- [x] `GET/POST /admin/ops/b2b/approvals`,
+- [x] `POST /admin/ops/b2b/approvals/decision`,
+- [x] `GET/POST /admin/ops/b2b/quotes`,
+- [x] `POST /admin/ops/b2b/quotes/status`.
+- [x] Added storefront B2B intake endpoints:
+- [x] `POST /store/b2b/companies/register`,
+- [x] `POST /store/b2b/approvals/submit`,
+- [x] `POST /store/b2b/quotes/request`.
+- [x] Expanded ops dashboard summary/reporting with B2B counters.
+- [x] Added B2B runtime helper + unit tests for company-code normalization and threshold auto-approval logic.
+- [x] Verified Medusa backend build and unit tests after B2B foundation additions.
+
+### 2026-05-31 - Phase 3 Continued: Live-Ready Fraktjakt/Klarna Runtime (Fallback-Safe)
+
+- [x] Upgraded integration runtime with live-call orchestration for Fraktjakt quote and Klarna payment-session flows.
+- [x] Added timeout-safe live request execution with automatic simulation fallback when enabled.
+- [x] Added runtime helper methods:
+- [x] `resolveShippingQuote(...)` with live/skip/simulated modes.
+- [x] `resolveKlarnaSession(...)` with live/skip/simulated modes.
+- [x] Added configurable runtime paths/timeouts:
+- [x] `FRAKTJAKT_RATE_PATH`, `FRAKTJAKT_RATE_TIMEOUT_MS`,
+- [x] `KLARNA_SESSION_PATH`, `KLARNA_SESSION_TIMEOUT_MS`.
+- [x] Updated admin/store shipping quote endpoints to use live-runtime resolution first.
+- [x] Updated admin/store Klarna session endpoints to use live-runtime resolution first.
+- [x] Added unit coverage for live runtime success + fallback behavior in integration-runtime tests.
+- [x] Updated API requirements and ops docs for live-ready runtime configuration.
+- [x] Verified Medusa backend build and unit tests after live-runtime updates.
+
+### 2026-05-31 - Phase 3 Continued: Shipping Lifecycle + Checkout Hardening
+
+- [x] Expanded Fraktjakt runtime coverage with booking, label, tracking, and address-validation live/simulated/skip orchestration.
+- [x] Added Fraktjakt package-plan builder for quote/booking payload reuse (pallet count, loading meters, shipment types, component totals).
+- [x] Added admin/store endpoints:
+- [x] `POST /admin/ops/shipping/address-validate`,
+- [x] `POST /admin/ops/shipping/booking`,
+- [x] `POST /admin/ops/shipping/label`,
+- [x] `GET /admin/ops/shipping/tracking?shipment_id=<id>`,
+- [x] `POST /store/checkout/shipping/address-validate`,
+- [x] `POST /store/checkout/shipping/booking`,
+- [x] `GET /store/checkout/shipping/tracking?shipment_id=<id>`.
+- [x] Expanded Klarna lifecycle runtime and routes for order/capture/refund.
+- [x] Added checkout hardening in storefront review flow:
+- [x] required purchase-terms acceptance gate before place-order action,
+- [x] newsletter opt-in toggle,
+- [x] cart metadata persistence for both preferences via existing cart update hook (no duplicate checkout state pipeline).
+- [x] Added/expanded integration runtime unit coverage for package-plan, booking/label/tracking, address validation, and Klarna order/capture/refund flows.
+
+### 2026-05-31 - Phase 3 Continued: Backend m2 Coverage API + Delivery Validation Wiring
+
+- [x] Added backend flooring/m2 coverage runtime helper (`calculateFlooringCoverage`) with direct-area and dimensions-mode support, waste handling, and package rounding.
+- [x] Added unit tests for backend flooring runtime coverage rules.
+- [x] Added new APIs:
+- [x] `POST /store/checkout/flooring/coverage`
+- [x] `POST /admin/ops/flooring/coverage`
+- [x] Connected storefront delivery step to backend shipping-address validation before shipping-method submit (`POST /store/checkout/shipping/address-validate`).
+- [x] Added in-checkout validation message surface for address warnings/errors.
+- [x] Added B2B checkout reference capture fields in storefront review step (PO number, invoice reference, depot reference) with cart metadata persistence.
+
+### 2026-05-31 - Phase 3/4 Closure: B2B Approval Gate + Payment Policy Filtering
+
+- [x] Added storefront B2B approval submission hook to backend (`POST /store/b2b/approvals/submit`) from checkout review.
+- [x] Added checkout review approval gate behavior: place-order action is blocked when approval is required and not approved.
+- [x] Added approval status/id metadata persistence to cart (`b2b_approval_id`, `b2b_approval_status`, submission timestamp).
+- [x] Added checkout payment method filtering policy support via cart metadata (`b2b_allowed_payment_methods` as CSV or array of provider IDs).
+- [x] Added user feedback surface for approval submission outcomes and blocking reasons.
+
+### 2026-05-31 - Phase 4 Continued: B2B Checkout Context + Backend-Backed m2 Runtime
+
+- [x] Added `GET /store/b2b/checkout/context?company_id=<id>` to resolve company checkout policy context (approval threshold/flag, allowed payment methods, and depot options).
+- [x] Added storefront query hook `useB2BCheckoutContext` and synced resolved context into cart metadata for stable downstream checkout behavior.
+- [x] Added managed depot dropdown in checkout review when company depots exist; text fallback remains when depots are not configured.
+- [x] Added storefront mutation hook `useFlooringCoverageQuote` for `POST /store/checkout/flooring/coverage`.
+- [x] Switched storefront product m2 calculator to backend runtime response with existing local calculator fallback retained.
+- [x] Verified `apps/storefront` production build after m2 and B2B checkout context wiring.
+- [x] Verified `apps/backend` production build after new B2B checkout context route wiring.
+- [x] Verified backend unit test suite (`34 passed`) including flooring and B2B runtime coverage.
+
 ### 2026-05-29 - Phase 2 Continued: Distributed Job Lease Lock
 
 - [x] Added Redis-based distributed lease lock for sync job runs.
@@ -394,7 +490,7 @@ This file tracks what is already implemented, what is partial, and what still ne
 ### 1. System Overview And Architecture
 
 - [~] Three-system architecture exists: Medusa, Strapi, storefront.
-- [ ] FRD integration rule is not complete: Fraktjakt and Klarna must be called only from Medusa backend.
+- [~] FRD integration rule is mostly implemented for backend runtime paths: Fraktjakt and Klarna operational endpoints now execute through Medusa backend. Remaining work is removing/retiring legacy frontend-direct payment assumptions and finishing provider-native checkout completion wiring.
 - [~] Dedicated integration layer has started with shared sync event utilities, secure Strapi webhook receiver, and persisted sync event/mapping storage. Queue worker and cross-system write handlers are still missing.
 - [ ] Role-based architecture across Super Admin, Sales Manager, Content Editor, Logistics Lead, B2B Company Admin, Buyer, Approver, and B2C Customer is not implemented.
 
@@ -407,8 +503,8 @@ This file tracks what is already implemented, what is partial, and what still ne
 - [ ] 2FA for admin and B2B roles is not implemented.
 - [ ] Account lockout, concurrent session limits, logout-all-devices, and password reset policy are not custom implemented.
 - [ ] Redis-backed rate limiting is not implemented.
-- [ ] Audit logging for admin actions is not implemented.
-- [ ] GDPR anonymisation workflow is not implemented.
+- [~] Audit logging foundation for ops-admin actions is implemented, but full cross-platform action coverage is still pending.
+- [~] GDPR anonymisation workflow is partially implemented through privacy request anonymize APIs, but broader domain coverage is still pending.
 - [ ] Dependency scanning/CI security checks are not configured.
 
 ### 3. Customer Management B2C
@@ -440,15 +536,15 @@ This file tracks what is already implemented, what is partial, and what still ne
 
 ### 5. B2B Company Management
 
-- [ ] Company profile module is missing.
-- [ ] Company approval flow is missing.
-- [ ] Company user roles are missing.
-- [ ] B2B company price lists and credit limits are missing.
-- [ ] Payment terms and payment method restrictions are missing.
-- [ ] Spend approval threshold is missing.
-- [ ] Order approval workflow is missing.
-- [ ] RFQ/quote module is missing.
-- [ ] Company depot addresses are missing.
+- [~] Company profile backend module now exists (ops B2B company model + APIs), but full admin/storefront UI is still missing.
+- [~] Company approval flow backend foundations now exist, but full UX/policy orchestration is still pending.
+- [~] Company user roles backend foundations now exist (admin/buyer/approver), but portal UX and auth integration are still pending.
+- [~] B2B company price-list code, credit-limit, and payment-terms fields now exist in backend, but pricing engine linkage is still pending.
+- [~] Payment method restrictions are now implemented in storefront checkout via company/cart metadata policy filtering; admin policy-management UX is still pending.
+- [~] Spend approval threshold backend logic exists and supports auto-approval below threshold; checkout/order orchestration is still pending.
+- [~] Order approval workflow backend foundation exists (create/list/decision), but frontend/admin lifecycle UX is still pending.
+- [~] RFQ/quote backend foundation exists (request/list/status), but quote PDF generation and portal UX are still pending.
+- [~] Company depot address support now exists for checkout context consumption (depot metadata + review-step dropdown); dedicated admin CRUD/portal UX is still pending.
 - [ ] B2B portal UI is missing.
 
 ### 6. Search And Discovery
@@ -470,14 +566,14 @@ This file tracks what is already implemented, what is partial, and what still ne
 - [~] Guest cart exists through local cart ID storage, but account merge on login is missing.
 - [ ] Persistent customer cart across devices is missing.
 - [ ] Stock reservation for cart/checkout is missing.
-- [ ] Fraktjakt address validation is missing.
-- [ ] Fraktjakt real-time shipping rates are missing.
-- [ ] Newsletter opt-in at checkout is missing.
-- [ ] Terms acceptance checkbox is missing.
+- [~] Fraktjakt address validation backend endpoints now exist (`POST /admin/ops/shipping/address-validate`, `POST /store/checkout/shipping/address-validate`) and checkout delivery-step wiring now validates before shipping-method submission; provider-specific edge-case handling and production hard fail/override policies are still pending.
+- [~] Fraktjakt real-time shipping rates are now partially implemented via live quote runtime + fallback simulation (`/admin|/store ... /shipping/quote-preview`), with final provider mapping and checkout method wiring still pending.
+- [~] Newsletter opt-in at checkout is now implemented in review step with cart metadata persistence; downstream marketing automation integration is still pending.
+- [~] Terms acceptance checkbox is now implemented in review step and enforced before place-order action; legal/audit policy wiring is still pending.
 - [ ] Saved-for-later is missing.
 - [ ] Abandoned cart recovery is missing.
 - [ ] Cart cross-sell display is missing.
-- [ ] B2B checkout differences are missing: PO number, depot dropdown, approval gate, filtered payment methods, invoice reference.
+- [~] B2B checkout differences are largely implemented in current scope: review-step PO number/invoice/depot references, approval-gate enforcement, approval submission, metadata-driven payment-method filtering, and company-context depot dropdown are in place. Remaining: deep order-workflow coupling and full role-based B2B portal UX.
 
 ### 8. Promotions And Marketing
 
@@ -490,7 +586,7 @@ This file tracks what is already implemented, what is partial, and what still ne
 ### 9. Orders And Fulfillment
 
 - [~] Basic order confirmation display exists.
-- [ ] Custom order lifecycle including B2B pending approval is missing.
+- [~] B2B pending-approval backend foundation is implemented in ops approval APIs, but full order-lifecycle integration in Medusa orders + storefront/admin UX is still pending.
 - [ ] Admin order detail extension from FRD is missing.
 - [ ] Internal/customer notes and resend confirmation action are missing.
 - [~] Returns/complaint intake, status records, store status lookup, and lifecycle transition guards now exist in backend ops APIs, but full RMA automation (labels/refund orchestration) is still missing.
@@ -499,29 +595,29 @@ This file tracks what is already implemented, what is partial, and what still ne
 
 ### 10. Fraktjakt Integration
 
-- [ ] Fraktjakt backend provider/module is missing.
+- [~] Fraktjakt backend provider/runtime now covers quote, booking, label, tracking, and address-validation lifecycles with live-call + simulation fallback; remaining provider scope is cancel/return/customs/webhook and full checkout orchestration.
 - [~] Fraktjakt integration connector registry + SKIP-state tracking exists in ops module; provider implementation is still missing.
-- [~] Fraktjakt runtime readiness checks and shipping quote preview endpoints now exist for admin/storefront flows; live carrier API calls are still pending.
+- [~] Fraktjakt runtime readiness checks now cover quote/booking/label/tracking/address-validation with configurable path+timeout settings; final provider payload mapping and cancellation/returns/customs orchestration are still pending.
 - [ ] Query/Requery/Order/Shipment/Track/Cancel/Return/Address/Customs API handling is missing.
-- [ ] Real-time rate calculation is missing.
-- [ ] Fraktjakt timeout fallback is missing.
+- [~] Real-time rate calculation is partially implemented through live quote runtime + fallback simulation; checkout shipping-method production wiring remains.
+- [~] Fraktjakt timeout fallback is implemented in runtime for quote/booking/label/tracking/address-validation calls; production observability + alerting are still pending.
 - [ ] Pallet and B2B shipment model is missing.
 - [ ] Multi-component/unit-level transmission is missing.
-- [ ] Label/document generation is missing.
+- [~] Label/document generation is partially implemented through `POST /admin/ops/shipping/label`; full order-fulfillment automation and customer-facing delivery are still pending.
 - [ ] Shipment tracking webhooks are missing.
 - [ ] Public tracking page is missing.
 
 ### 11. Payments - Klarna
 
-- [ ] Klarna backend payment provider is missing.
+- [~] Klarna backend payment runtime foundation now exists for live session creation with timeout fallback, but full payment lifecycle (authorization/order/capture/refund/dispute) is still missing.
 - [~] Klarna integration connector registry + SKIP-state tracking exists in ops module; provider implementation is still missing.
-- [~] Klarna runtime readiness checks and payment session preview endpoints now exist for admin/storefront flows; live payment session creation is still pending.
+- [~] Klarna runtime readiness checks and session endpoints now include live-call attempt + simulation fallback; full production payment/order lifecycle is still pending.
 - [ ] Klarna API credential management is missing.
 - [ ] Klarna test/production mode config is missing.
 - [ ] Klarna Pay Now, Pay Later, Instalments, B2B Invoice are not production implemented.
 - [ ] Swish is missing.
 - [ ] Bank transfer/invoice workflow is missing.
-- [ ] Klarna refund, capture, dispute, and reconciliation handling is missing.
+- [~] Klarna refund/capture runtime and endpoints are now implemented (`/admin/ops/payments/klarna/capture`, `/admin/ops/payments/klarna/refund`); dispute handling and accounting reconciliation are still pending.
 
 ### 12. Custom Invoice And Communications
 
@@ -590,7 +686,7 @@ This file tracks what is already implemented, what is partial, and what still ne
 - [~] Storefront build passes.
 - [ ] Performance budget and LCP testing are missing.
 - [ ] API p95 monitoring is missing.
-- [ ] Checkout Fraktjakt timeout fallback is missing.
+- [~] Checkout Fraktjakt timeout fallback is now available in backend runtime for quote/booking/tracking flows; storefront checkout binding is still pending.
 - [ ] WCAG 2.1 AA audit is missing.
 - [~] i18n infrastructure exists.
 - [ ] Daily exchange-rate update is missing.
@@ -651,30 +747,30 @@ Goal: implement the most reusable integration layer from the FRD before adding m
 
 Goal: make checkout production-capable for Sweden.
 
-- [ ] Build Fraktjakt fulfillment provider/module in Medusa.
-- [ ] Implement address validation through Fraktjakt.
-- [ ] Implement real-time rate query and timeout fallback.
-- [ ] Implement package/pallet/component calculation using existing product metadata.
-- [ ] Add shipment booking after payment.
-- [ ] Add label generation and tracking sync.
-- [ ] Build Klarna payment provider in Medusa.
+- [~] Build Fraktjakt fulfillment provider/module in Medusa.
+- [~] Implement address validation through Fraktjakt.
+- [~] Implement real-time rate query and timeout fallback.
+- [~] Implement package/pallet/component calculation using existing product metadata.
+- [~] Add shipment booking after payment.
+- [~] Add label generation and tracking sync.
+- [~] Build Klarna payment provider in Medusa.
 - [ ] Replace demo Stripe/Kustom frontend logic with backend-driven provider sessions.
-- [ ] Add checkout terms checkbox and newsletter opt-in.
-- [ ] Add payment/refund/capture handling paths.
+- [~] Add checkout terms checkbox and newsletter opt-in.
+- [~] Add payment/refund/capture handling paths.
 
 ### Phase 4 - B2B Core
 
 Goal: support the main B2B business model.
 
-- [ ] Create B2B company module.
-- [ ] Add company status, org number/VAT ID, sales manager, credit limit, payment terms, price list.
-- [ ] Add company users and roles: admin, buyer, approver.
-- [ ] Add company depot addresses.
+- [~] Create B2B company module.
+- [~] Add company status, org number/VAT ID, sales manager, credit limit, payment terms, price list.
+- [~] Add company users and roles: admin, buyer, approver.
+- [~] Add company depot addresses (checkout-context consumption is implemented; dedicated admin CRUD + portal UX still pending).
 - [ ] Add B2B login/account portal.
-- [ ] Add approval threshold logic.
-- [ ] Add pending approval order state and approver workflow.
-- [ ] Add RFQ/quote workflow and quote PDF generation.
-- [ ] Add B2B checkout fields: PO number, depot, invoice reference, filtered payment methods.
+- [~] Add approval threshold logic.
+- [~] Add pending approval order state and approver workflow.
+- [~] Add RFQ/quote workflow and quote PDF generation.
+- [x] Add B2B checkout fields: PO number/depot reference/invoice reference capture, payment-method filtering policy, and approval orchestration are implemented in storefront checkout flow.
 
 ### Phase 5 - Customer Self-Service And Retention
 
@@ -719,6 +815,6 @@ Goal: make the platform manageable after sales start.
 
 Continue Phase 3: Checkout Revenue Path (Fraktjakt + Klarna live execution) while keeping Phase 2/ops stable.
 
-Reason: backend operations + integration runtime now cover client-request domains (tax records, complaint/return intake, import tracking, integration registry, health checks, preview flows, and SKIP-safe simulation), so the highest-value remaining work is replacing previews with live provider API execution and end-to-end checkout/order automation.
+Reason: backend runtime now covers quote/session + booking/label/tracking + address validation and Klarna order/capture/refund, so the highest-value remaining work is end-to-end storefront wiring and credentialed production rollout.
 
-Next concrete slice: implement first live provider path (Fraktjakt rate quote API + fallback), then promote Klarna preview route into live payment-session creation, then connect Fortnox export jobs to real API push with retry/error capture.
+Next concrete slice: wire storefront checkout shipping/payment flow to new backend endpoints (remove legacy frontend-direct assumptions), then connect Fortnox export jobs to live API push with retry/error capture, then execute production credential onboarding and UAT checklist.

@@ -1,6 +1,6 @@
 import { getStoredCart, removeStoredCart} from "@/lib/utils/cart"
-import { queryKeys } from "@/lib/utils/query-keys"
 import { sdk } from "@/lib/utils/sdk"
+import { queryKeys } from "@/lib/utils/query-keys"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 const DEFAULT_CART_FIELDS = "+items.total, shipping_methods.name"
@@ -99,6 +99,169 @@ export const useSetCartShippingMethod = () => {
     onSuccess: async (cart) => {
       queryClient.invalidateQueries({ predicate: queryKeys.cart.predicate })
       queryClient.invalidateQueries({ queryKey: queryKeys.shipping.options(cart.id) })
+    },
+  })
+}
+
+export const useValidateCheckoutShippingAddress = () => {
+  return useMutation({
+    mutationFn: async ({
+      country_code,
+      postal_code,
+      city,
+      address_line1,
+      company,
+      recipient_name,
+      phone,
+    }: {
+      country_code?: string;
+      postal_code?: string;
+      city?: string;
+      address_line1?: string;
+      company?: string;
+      recipient_name?: string;
+      phone?: string;
+    }) => {
+      return sdk.client.fetch<{
+        status: string;
+        note?: string;
+        reason?: string;
+        validation?: {
+          is_valid: boolean;
+          normalized_address?: Record<string, unknown>;
+          warnings?: string[];
+        };
+      }>("/store/checkout/shipping/address-validate", {
+        method: "POST",
+        body: {
+          country_code,
+          postal_code,
+          city,
+          address_line1,
+          company,
+          recipient_name,
+          phone,
+        },
+      })
+    },
+  })
+}
+
+export const useSubmitB2BApprovalRequest = () => {
+  return useMutation({
+    mutationFn: async ({
+      company_id,
+      order_id,
+      requested_by_user_id,
+      amount_total,
+      currency_code,
+      metadata,
+    }: {
+      company_id: string;
+      order_id: string;
+      requested_by_user_id?: string;
+      amount_total: number;
+      currency_code?: string;
+      metadata?: Record<string, unknown>;
+    }) => {
+      return sdk.client.fetch<{
+        status: string;
+        approval_id?: string;
+        approval_status?: string;
+        message?: string;
+      }>("/store/b2b/approvals/submit", {
+        method: "POST",
+        body: {
+          company_id,
+          order_id,
+          requested_by_user_id,
+          amount_total,
+          currency_code,
+          metadata,
+        },
+      })
+    },
+  })
+}
+
+export const useB2BCheckoutContext = ({
+  company_id,
+}: {
+  company_id?: string;
+} = {}) => {
+  return useQuery({
+    queryKey: queryKeys.custom.detail("b2b-checkout-context", company_id || ""),
+    queryFn: async () => {
+      if (!company_id) {
+        return null
+      }
+
+      const response = await sdk.client.fetch<{
+        status: string;
+        context?: {
+          company_id: string;
+          company_code?: string;
+          company_name?: string;
+          company_status?: string;
+          payment_terms_days?: number;
+          approval_threshold?: number;
+          approval_required?: boolean;
+          allowed_payment_method_ids?: string[];
+          depots?: Array<{
+            id: string;
+            name: string;
+            reference?: string;
+            address?: string;
+          }>;
+        };
+      }>(`/store/b2b/checkout/context?company_id=${encodeURIComponent(company_id)}`, {
+        method: "GET",
+      })
+
+      return response.context || null
+    },
+    enabled: Boolean(company_id),
+    staleTime: 60 * 1000,
+  })
+}
+
+export const useFlooringCoverageQuote = () => {
+  return useMutation({
+    mutationFn: async ({
+      desired_m2,
+      length_m,
+      width_m,
+      m2_per_package,
+      waste_pct,
+    }: {
+      desired_m2?: number;
+      length_m?: number;
+      width_m?: number;
+      m2_per_package?: number;
+      waste_pct?: number;
+    }) => {
+      return sdk.client.fetch<{
+        status: string;
+        result?: {
+          desired_m2: number;
+          waste_pct: number;
+          total_m2_with_waste: number;
+          m2_per_package: number;
+          packages_needed: number;
+          is_valid: boolean;
+          mode: "direct" | "dimensions";
+          note?: string;
+        };
+      }>("/store/checkout/flooring/coverage", {
+        method: "POST",
+        body: {
+          desired_m2,
+          length_m,
+          width_m,
+          m2_per_package,
+          waste_pct,
+        },
+      })
     },
   })
 }

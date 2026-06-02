@@ -3,6 +3,10 @@ import ComplaintCase from "./models/complaint-case";
 import ImportJob from "./models/import-job";
 import IntegrationConnector from "./models/integration-connector";
 import AuditLog from "./models/audit-log";
+import B2BCompany from "./models/b2b-company";
+import B2BCompanyUser from "./models/b2b-company-user";
+import B2BOrderApproval from "./models/b2b-order-approval";
+import B2BQuoteRequest from "./models/b2b-quote-request";
 import PrivacyRequest from "./models/privacy-request";
 import ReturnRequestCase from "./models/return-request-case";
 import TaxConfiguration from "./models/tax-configuration";
@@ -26,6 +30,10 @@ import {
   anonymizeIdentifier,
   normalizeEmail,
 } from "../../lib/ops/privacy-runtime";
+import {
+  normalizeB2BCompanyCode,
+  shouldAutoApproveB2BOrder,
+} from "../../lib/ops/b2b-runtime";
 import path from "path";
 import fs from "fs/promises";
 
@@ -51,6 +59,18 @@ type GeneratedOpsModuleService = {
   listPrivacyRequests: (filters?: any, config?: any) => Promise<any[]>;
   createPrivacyRequests: (data: any) => Promise<any>;
   updatePrivacyRequests: (data: any) => Promise<any[]>;
+  listB2BCompanies: (filters?: any, config?: any) => Promise<any[]>;
+  createB2BCompanies: (data: any) => Promise<any>;
+  updateB2BCompanies: (data: any) => Promise<any[]>;
+  listB2BCompanyUsers: (filters?: any, config?: any) => Promise<any[]>;
+  createB2BCompanyUsers: (data: any) => Promise<any>;
+  updateB2BCompanyUsers: (data: any) => Promise<any[]>;
+  listB2BOrderApprovals: (filters?: any, config?: any) => Promise<any[]>;
+  createB2BOrderApprovals: (data: any) => Promise<any>;
+  updateB2BOrderApprovals: (data: any) => Promise<any[]>;
+  listB2BQuoteRequests: (filters?: any, config?: any) => Promise<any[]>;
+  createB2BQuoteRequests: (data: any) => Promise<any>;
+  updateB2BQuoteRequests: (data: any) => Promise<any[]>;
 };
 
 type ComplaintType =
@@ -85,6 +105,17 @@ type PrivacyRequestStatus =
   | "completed"
   | "rejected"
   | "skipped";
+type B2BCompanyStatus = "pending" | "active" | "suspended" | "rejected";
+type B2BCompanyUserRole = "admin" | "buyer" | "approver";
+type B2BCompanyUserStatus = "invited" | "active" | "disabled";
+type B2BApprovalStatus = "pending" | "approved" | "rejected" | "cancelled";
+type B2BQuoteStatus =
+  | "requested"
+  | "under_review"
+  | "quoted"
+  | "accepted"
+  | "rejected"
+  | "expired";
 
 type IntegrationHealthCheckResult = {
   key: string;
@@ -172,6 +203,10 @@ class OpsModuleService extends MedusaService({
   IntegrationConnector,
   AuditLog,
   PrivacyRequest,
+  B2BCompany,
+  B2BCompanyUser,
+  B2BOrderApproval,
+  B2BQuoteRequest,
 }) {
   async logAuditEvent(input: {
     entityType: string;
@@ -1670,9 +1705,583 @@ class OpsModuleService extends MedusaService({
     };
   }
 
+  async createB2BCompany(input: {
+    name: string;
+    companyCode?: string;
+    organizationNumber?: string;
+    vatId?: string;
+    status?: B2BCompanyStatus;
+    salesManagerId?: string;
+    creditLimit?: number;
+    paymentTermsDays?: number;
+    spendApprovalThreshold?: number;
+    priceListCode?: string;
+    defaultCurrencyCode?: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const normalizedCode = normalizeB2BCompanyCode(input.companyCode || input.name);
+    const existing = await generated.listB2BCompanies(
+      {
+        company_code: normalizedCode,
+      },
+      { take: 1 }
+    );
+
+    if (existing[0]) {
+      throw new Error("B2B company code already exists");
+    }
+
+    const created = await generated.createB2BCompanies(
+      withoutUndefined({
+        name: input.name,
+        company_code: normalizedCode,
+        organization_number: input.organizationNumber,
+        vat_id: input.vatId,
+        status: input.status || "pending",
+        sales_manager_id: input.salesManagerId,
+        credit_limit: input.creditLimit ?? 0,
+        payment_terms_days: input.paymentTermsDays ?? 30,
+        spend_approval_threshold: input.spendApprovalThreshold ?? 0,
+        price_list_code: input.priceListCode,
+        default_currency_code: String(input.defaultCurrencyCode || "SEK").toUpperCase(),
+        metadata: input.metadata,
+      })
+    );
+
+    await this.logAuditEvent({
+      entityType: "b2b_company",
+      entityId: created.id,
+      action: "create",
+      actorType: "admin",
+      source: "ops.service.createB2BCompany",
+      afterState: {
+        name: created.name,
+        company_code: created.company_code,
+        status: created.status,
+      },
+    });
+
+    return created;
+  }
+
+  async getB2BCompanies({
+    status,
+    limit = 200,
+  }: {
+    status?: B2BCompanyStatus;
+    limit?: number;
+  } = {}) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const take = Math.max(Math.min(Number(limit) || 200, 500), 1);
+    const items = await generated.listB2BCompanies(
+      withoutUndefined({
+        status,
+      }),
+      {
+        take: take * 2,
+      }
+    );
+
+    return items
+      .sort((a, b) => {
+        return new Date(b.updated_at || b.created_at).getTime() -
+          new Date(a.updated_at || a.created_at).getTime();
+      })
+      .slice(0, take);
+  }
+
+  async updateB2BCompanyStatus({
+    id,
+    status,
+    metadata,
+  }: {
+    id: string;
+    status: B2BCompanyStatus;
+    metadata?: Record<string, unknown>;
+  }) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const items = await generated.listB2BCompanies(
+      {
+        id: String(id || "").trim(),
+      },
+      { take: 1 }
+    );
+    const current = items[0];
+
+    if (!current) {
+      throw new Error("B2B company not found");
+    }
+
+    const [updated] = await generated.updateB2BCompanies({
+      selector: {
+        id: current.id,
+      },
+      data: withoutUndefined({
+        status,
+        metadata: metadata
+          ? {
+              ...(current.metadata || {}),
+              ...metadata,
+            }
+          : undefined,
+      }),
+    });
+
+    await this.logAuditEvent({
+      entityType: "b2b_company",
+      entityId: updated.id,
+      action: "status_update",
+      actorType: "admin",
+      source: "ops.service.updateB2BCompanyStatus",
+      beforeState: {
+        status: current.status,
+      },
+      afterState: {
+        status: updated.status,
+      },
+    });
+
+    return updated;
+  }
+
+  async createB2BCompanyUser(input: {
+    companyId: string;
+    medusaCustomerId?: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    role?: B2BCompanyUserRole;
+    status?: B2BCompanyUserStatus;
+    approvalLimit?: number;
+    metadata?: Record<string, unknown>;
+  }) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const companyItems = await generated.listB2BCompanies(
+      {
+        id: String(input.companyId || "").trim(),
+      },
+      { take: 1 }
+    );
+    const company = companyItems[0];
+
+    if (!company) {
+      throw new Error("B2B company not found");
+    }
+
+    const created = await generated.createB2BCompanyUsers(
+      withoutUndefined({
+        company_id: company.id,
+        medusa_customer_id: input.medusaCustomerId,
+        email: normalizeEmail(input.email),
+        first_name: input.firstName,
+        last_name: input.lastName,
+        role: input.role || "buyer",
+        status: input.status || "invited",
+        approval_limit: input.approvalLimit ?? 0,
+        metadata: input.metadata,
+      })
+    );
+
+    await this.logAuditEvent({
+      entityType: "b2b_company_user",
+      entityId: created.id,
+      action: "create",
+      actorType: "admin",
+      source: "ops.service.createB2BCompanyUser",
+      afterState: {
+        company_id: created.company_id,
+        email: created.email,
+        role: created.role,
+        status: created.status,
+      },
+    });
+
+    return created;
+  }
+
+  async getB2BCompanyUsers({
+    companyId,
+    role,
+    status,
+    limit = 300,
+  }: {
+    companyId?: string;
+    role?: B2BCompanyUserRole;
+    status?: B2BCompanyUserStatus;
+    limit?: number;
+  } = {}) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const take = Math.max(Math.min(Number(limit) || 300, 500), 1);
+    const items = await generated.listB2BCompanyUsers(
+      withoutUndefined({
+        company_id: companyId ? String(companyId).trim() : undefined,
+        role,
+        status,
+      }),
+      {
+        take: take * 2,
+      }
+    );
+
+    return items
+      .sort((a, b) => {
+        return new Date(b.updated_at || b.created_at).getTime() -
+          new Date(a.updated_at || a.created_at).getTime();
+      })
+      .slice(0, take);
+  }
+
+  async updateB2BCompanyUserStatus({
+    id,
+    status,
+    approvalLimit,
+  }: {
+    id: string;
+    status: B2BCompanyUserStatus;
+    approvalLimit?: number;
+  }) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const items = await generated.listB2BCompanyUsers(
+      {
+        id: String(id || "").trim(),
+      },
+      { take: 1 }
+    );
+    const current = items[0];
+
+    if (!current) {
+      throw new Error("B2B company user not found");
+    }
+
+    const [updated] = await generated.updateB2BCompanyUsers({
+      selector: {
+        id: current.id,
+      },
+      data: withoutUndefined({
+        status,
+        approval_limit: approvalLimit,
+      }),
+    });
+
+    await this.logAuditEvent({
+      entityType: "b2b_company_user",
+      entityId: updated.id,
+      action: "status_update",
+      actorType: "admin",
+      source: "ops.service.updateB2BCompanyUserStatus",
+      beforeState: {
+        status: current.status,
+        approval_limit: current.approval_limit,
+      },
+      afterState: {
+        status: updated.status,
+        approval_limit: updated.approval_limit,
+      },
+    });
+
+    return updated;
+  }
+
+  async createB2BOrderApproval(input: {
+    companyId: string;
+    orderId: string;
+    requestedByUserId?: string;
+    approverUserId?: string;
+    amountTotal: number;
+    currencyCode?: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const companyItems = await generated.listB2BCompanies(
+      {
+        id: String(input.companyId || "").trim(),
+      },
+      { take: 1 }
+    );
+    const company = companyItems[0];
+
+    if (!company) {
+      throw new Error("B2B company not found");
+    }
+
+    const threshold = Number(company.spend_approval_threshold || 0);
+    const amountTotal = Number(input.amountTotal || 0);
+    const autoApproved = shouldAutoApproveB2BOrder({
+      threshold,
+      amountTotal,
+    });
+    const created = await generated.createB2BOrderApprovals(
+      withoutUndefined({
+        company_id: company.id,
+        order_id: input.orderId,
+        requested_by_user_id: input.requestedByUserId,
+        approver_user_id: input.approverUserId,
+        status: autoApproved ? "approved" : "pending",
+        amount_total: amountTotal,
+        currency_code: String(input.currencyCode || company.default_currency_code || "SEK")
+          .toUpperCase(),
+        requested_at: new Date(),
+        decided_at: autoApproved ? new Date() : undefined,
+        decision_note: autoApproved ? "AUTO_APPROVED_WITHIN_THRESHOLD" : undefined,
+        metadata: {
+          ...(input.metadata || {}),
+          threshold,
+        },
+      })
+    );
+
+    await this.logAuditEvent({
+      entityType: "b2b_order_approval",
+      entityId: created.id,
+      action: autoApproved ? "auto_approved" : "create",
+      actorType: "system",
+      source: "ops.service.createB2BOrderApproval",
+      afterState: {
+        company_id: created.company_id,
+        order_id: created.order_id,
+        status: created.status,
+        amount_total: created.amount_total,
+      },
+    });
+
+    return created;
+  }
+
+  async getB2BOrderApprovals({
+    companyId,
+    status,
+    limit = 200,
+  }: {
+    companyId?: string;
+    status?: B2BApprovalStatus;
+    limit?: number;
+  } = {}) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const take = Math.max(Math.min(Number(limit) || 200, 500), 1);
+    const items = await generated.listB2BOrderApprovals(
+      withoutUndefined({
+        company_id: companyId ? String(companyId).trim() : undefined,
+        status,
+      }),
+      {
+        take: take * 2,
+      }
+    );
+
+    return items
+      .sort((a, b) => {
+        return new Date(b.updated_at || b.created_at).getTime() -
+          new Date(a.updated_at || a.created_at).getTime();
+      })
+      .slice(0, take);
+  }
+
+  async decideB2BOrderApproval(input: {
+    id: string;
+    status: Exclude<B2BApprovalStatus, "pending">;
+    approverUserId?: string;
+    decisionNote?: string;
+  }) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const items = await generated.listB2BOrderApprovals(
+      {
+        id: String(input.id || "").trim(),
+      },
+      { take: 1 }
+    );
+    const current = items[0];
+
+    if (!current) {
+      throw new Error("B2B approval request not found");
+    }
+
+    if (String(current.status) !== "pending") {
+      throw new Error("B2B approval request is not pending");
+    }
+
+    const [updated] = await generated.updateB2BOrderApprovals({
+      selector: {
+        id: current.id,
+      },
+      data: {
+        status: input.status,
+        approver_user_id: input.approverUserId,
+        decided_at: new Date(),
+        decision_note: input.decisionNote,
+      },
+    });
+
+    await this.logAuditEvent({
+      entityType: "b2b_order_approval",
+      entityId: updated.id,
+      action: input.status === "approved" ? "approve" : "reject",
+      actorType: "admin",
+      actorId: input.approverUserId,
+      source: "ops.service.decideB2BOrderApproval",
+      beforeState: {
+        status: current.status,
+      },
+      afterState: {
+        status: updated.status,
+        decision_note: updated.decision_note || null,
+      },
+    });
+
+    return updated;
+  }
+
+  async createB2BQuoteRequest(input: {
+    companyId: string;
+    requestedByUserId?: string;
+    customerEmail?: string;
+    currencyCode?: string;
+    requestedTotal?: number;
+    note?: string;
+    items?: Array<Record<string, unknown>>;
+    metadata?: Record<string, unknown>;
+  }) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const companyItems = await generated.listB2BCompanies(
+      {
+        id: String(input.companyId || "").trim(),
+      },
+      { take: 1 }
+    );
+    const company = companyItems[0];
+
+    if (!company) {
+      throw new Error("B2B company not found");
+    }
+
+    const reference = normalizeReference("RFQ");
+    const created = await generated.createB2BQuoteRequests({
+      company_id: company.id,
+      requested_by_user_id: input.requestedByUserId,
+      customer_email: normalizeEmail(input.customerEmail),
+      reference,
+      status: "requested",
+      currency_code: String(input.currencyCode || company.default_currency_code || "SEK")
+        .toUpperCase(),
+      requested_total: Number(input.requestedTotal || 0),
+      note: input.note,
+      items: input.items || [],
+      metadata: input.metadata,
+    });
+
+    await this.logAuditEvent({
+      entityType: "b2b_quote_request",
+      entityId: created.id,
+      action: "create",
+      actorType: "storefront",
+      actorId: input.requestedByUserId,
+      actorEmail: input.customerEmail,
+      source: "ops.service.createB2BQuoteRequest",
+      afterState: {
+        company_id: created.company_id,
+        reference: created.reference,
+        status: created.status,
+      },
+    });
+
+    return created;
+  }
+
+  async getB2BQuoteRequests({
+    companyId,
+    status,
+    limit = 200,
+  }: {
+    companyId?: string;
+    status?: B2BQuoteStatus;
+    limit?: number;
+  } = {}) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const take = Math.max(Math.min(Number(limit) || 200, 500), 1);
+    const items = await generated.listB2BQuoteRequests(
+      withoutUndefined({
+        company_id: companyId ? String(companyId).trim() : undefined,
+        status,
+      }),
+      {
+        take: take * 2,
+      }
+    );
+
+    return items
+      .sort((a, b) => {
+        return new Date(b.updated_at || b.created_at).getTime() -
+          new Date(a.updated_at || a.created_at).getTime();
+      })
+      .slice(0, take);
+  }
+
+  async updateB2BQuoteStatus(input: {
+    id: string;
+    status: B2BQuoteStatus;
+    quotedTotal?: number;
+    validUntil?: string | Date | null;
+    note?: string;
+  }) {
+    const generated = this as unknown as GeneratedOpsModuleService;
+    const items = await generated.listB2BQuoteRequests(
+      {
+        id: String(input.id || "").trim(),
+      },
+      { take: 1 }
+    );
+    const current = items[0];
+
+    if (!current) {
+      throw new Error("B2B quote request not found");
+    }
+
+    const [updated] = await generated.updateB2BQuoteRequests({
+      selector: {
+        id: current.id,
+      },
+      data: withoutUndefined({
+        status: input.status,
+        quoted_total: input.quotedTotal,
+        valid_until: toDate(input.validUntil),
+        note: input.note,
+      }),
+    });
+
+    await this.logAuditEvent({
+      entityType: "b2b_quote_request",
+      entityId: updated.id,
+      action: "status_update",
+      actorType: "admin",
+      source: "ops.service.updateB2BQuoteStatus",
+      beforeState: {
+        status: current.status,
+        quoted_total: current.quoted_total ?? null,
+      },
+      afterState: {
+        status: updated.status,
+        quoted_total: updated.quoted_total ?? null,
+      },
+    });
+
+    return updated;
+  }
+
   async getOpsDashboardSummary() {
     const generated = this as unknown as GeneratedOpsModuleService;
-    const [complaints, returns, imports, integrations, taxConfigurations, auditLogs, privacyRequests] =
+    const [
+      complaints,
+      returns,
+      imports,
+      integrations,
+      taxConfigurations,
+      auditLogs,
+      privacyRequests,
+      b2bCompanies,
+      b2bUsers,
+      b2bApprovals,
+      b2bQuotes,
+    ] =
       await Promise.all([
         generated.listComplaintCases({}, { take: 2000 }),
         generated.listReturnRequestCases({}, { take: 2000 }),
@@ -1681,6 +2290,10 @@ class OpsModuleService extends MedusaService({
         generated.listTaxConfigurations({}, { take: 500 }),
         generated.listAuditLogs({}, { take: 2000 }),
         generated.listPrivacyRequests({}, { take: 2000 }),
+        generated.listB2BCompanies({}, { take: 2000 }),
+        generated.listB2BCompanyUsers({}, { take: 4000 }),
+        generated.listB2BOrderApprovals({}, { take: 4000 }),
+        generated.listB2BQuoteRequests({}, { take: 4000 }),
       ]);
     const integrationRuntime = getAllIntegrationRuntimeReports();
     const statusCount = (items: any[], field: string) => {
@@ -1723,6 +2336,25 @@ class OpsModuleService extends MedusaService({
       privacy_requests: {
         total: privacyRequests.length,
         byStatus: statusCount(privacyRequests, "status"),
+      },
+      b2b: {
+        companies: {
+          total: b2bCompanies.length,
+          byStatus: statusCount(b2bCompanies, "status"),
+        },
+        users: {
+          total: b2bUsers.length,
+          byRole: statusCount(b2bUsers, "role"),
+          byStatus: statusCount(b2bUsers, "status"),
+        },
+        approvals: {
+          total: b2bApprovals.length,
+          byStatus: statusCount(b2bApprovals, "status"),
+        },
+        quotes: {
+          total: b2bQuotes.length,
+          byStatus: statusCount(b2bQuotes, "status"),
+        },
       },
     };
   }

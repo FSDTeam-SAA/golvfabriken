@@ -3,6 +3,7 @@ import StripeCardContainer from "@/components/stripe-card-container"
 import KustomCheckoutContainer from "@/components/kustom-checkout-container"
 import { Button } from "@/components/ui/button"
 import {
+  useB2BCheckoutContext,
   useCartPaymentMethods,
   useInitiateCartPaymentSession,
 } from "@/lib/hooks/use-checkout"
@@ -27,6 +28,11 @@ const PaymentStep = ({ cart, onNext, onBack }: PaymentStepProps) => {
   const { data: availablePaymentMethods = [] } = useCartPaymentMethods({
     region_id: cart.region?.id,
   })
+  const cartMetadata = (cart.metadata || {}) as Record<string, unknown>
+  const b2bCompanyId = String(cartMetadata.b2b_company_id || "").trim()
+  const { data: b2bCheckoutContext } = useB2BCheckoutContext({
+    company_id: b2bCompanyId || undefined,
+  })
   const initiatePaymentSessionMutation = useInitiateCartPaymentSession()
 
   const activeSession = getActivePaymentSession(cart)
@@ -35,6 +41,44 @@ const PaymentStep = ({ cart, onNext, onBack }: PaymentStepProps) => {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(
     activeSession?.provider_id ?? ""
   )
+
+  const parseAllowedPaymentIds = (
+    value: unknown
+  ): string[] => {
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+    }
+
+    if (typeof value === "string") {
+      return value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    }
+
+    return []
+  }
+
+  const filteredPaymentMethods = (() => {
+    const configuredAllowedIds = parseAllowedPaymentIds(
+      b2bCheckoutContext?.allowed_payment_method_ids ??
+        cartMetadata.b2b_allowed_payment_methods
+    )
+
+    if (configuredAllowedIds.length) {
+      const allowedIdSet = new Set(configuredAllowedIds)
+      const configured = availablePaymentMethods.filter((method) =>
+        allowedIdSet.has(method.id)
+      )
+      if (configured.length > 0) {
+        return configured
+      }
+    }
+
+    return availablePaymentMethods
+  })()
 
   const isStripe = isStripeFunc(selectedPaymentMethod)
   const isKustom = isKustomFunc(selectedPaymentMethod)
@@ -69,14 +113,14 @@ const PaymentStep = ({ cart, onNext, onBack }: PaymentStepProps) => {
 
   // Update selected payment method when payment methods are loaded
   useEffect(() => {
-    if (!selectedPaymentMethod && availablePaymentMethods?.length > 0) {
-      const firstMethod = availablePaymentMethods[0]
+    if (!selectedPaymentMethod && filteredPaymentMethods?.length > 0) {
+      const firstMethod = filteredPaymentMethods[0]
       if (firstMethod) {
         setSelectedPaymentMethod(firstMethod.id)
         handlePaymentMethodChange(firstMethod.id)
       }
     }
-  }, [availablePaymentMethods, selectedPaymentMethod, handlePaymentMethodChange])
+  }, [filteredPaymentMethods, selectedPaymentMethod, handlePaymentMethodChange])
 
   const handleSubmit = useCallback(async () => {
     if (!selectedPaymentMethod) return
@@ -93,14 +137,14 @@ const PaymentStep = ({ cart, onNext, onBack }: PaymentStepProps) => {
 
   return (
     <div className="flex flex-col gap-8">
-      {!paidByGiftcard && (availablePaymentMethods?.length ?? 0) > 0 && (
+      {!paidByGiftcard && (
         <>
-          {availablePaymentMethods.length === 0 && (
+          {(filteredPaymentMethods?.length ?? 0) === 0 && (
             <p className="text-base font-medium text-zinc-600">
               {t('checkout.noPaymentMethods')}
             </p>
           )}
-          {availablePaymentMethods.map((paymentMethod) => (
+          {filteredPaymentMethods.map((paymentMethod) => (
             <div key={paymentMethod.id}>
               <PaymentContainer
                 paymentProviderId={paymentMethod.id}

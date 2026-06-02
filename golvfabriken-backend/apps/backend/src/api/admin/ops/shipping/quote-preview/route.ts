@@ -1,8 +1,6 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
 import {
-  buildShippingQuotePreview,
-  getIntegrationRuntimeReport,
-  isOpsIntegrationSimulationEnabled,
+  resolveShippingQuote,
   type ShippingQuotePreviewInput,
 } from "../../../../../lib/ops/integration-runtime";
 import { validateOpsAdminSecret } from "../../utils/admin-auth";
@@ -25,36 +23,27 @@ export async function POST(
   }
 
   const payload = req.body || {};
-  const runtime = getIntegrationRuntimeReport("fraktjakt");
-  const simulationEnabled = isOpsIntegrationSimulationEnabled();
+  const result = await resolveShippingQuote({
+    destination_country: payload.destination_country,
+    postal_code: payload.postal_code,
+    items: payload.items,
+    currency_code: payload.currency_code,
+  });
 
-  if (!runtime.ready && !simulationEnabled) {
+  if (result.mode === "skip") {
     res.status(412).json({
       status: "skip",
-      reason: runtime.skipReason,
-      missing_keys: runtime.missingKeys,
+      reason: result.note || result.runtime.skipReason,
+      missing_keys: result.runtime.missingKeys,
+      runtime: result.runtime,
     });
     return;
   }
 
-  const quotes = buildShippingQuotePreview({
-    destination_country: payload.destination_country,
-    postal_code: payload.postal_code,
-    items: payload.items,
-  }).map((quote) => {
-    if (payload.currency_code) {
-      return {
-        ...quote,
-        currency_code: String(payload.currency_code).toUpperCase(),
-      };
-    }
-
-    return quote;
-  });
-
   res.status(200).json({
-    status: runtime.ready ? "live_ready_preview" : "skip_preview",
-    runtime,
-    quotes,
+    status: result.mode === "live" ? "live" : "fallback_preview",
+    runtime: result.runtime,
+    note: result.note,
+    quotes: result.quotes,
   });
 }
