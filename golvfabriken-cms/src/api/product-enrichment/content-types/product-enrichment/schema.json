@@ -1,0 +1,134 @@
+{
+  "kind": "collectionType",
+  "collectionName": "product_enrichments",
+  "info": {
+    "singularName": "product-enrichment",
+    "pluralName": "product-enrichments",
+    "displayName": "Product Enrichment",
+    "description": "CMS-managed product content keyed by Medusa product slug."
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {
+    "i18n": {
+      "localized": true
+    }
+  },
+  "attributes": {
+    "medusa_id": {
+      "type": "string",
+      "unique": true
+    },
+    "slug": {
+      "type": "uid",
+      "required": true
+    },
+    "sku": {
+      "type": "string"
+    },
+    "commerce_title": {
+      "type": "string"
+    },
+    "short_description": {
+      "type": "text"
+    },
+    "long_description": {
+      "type": "richtext"
+    },
+    "seo_title": {
+      "type": "string",
+      "maxLength": 60
+    },
+    "seo_description": {
+      "type": "text",
+      "maxLength": 160
+    },
+    "focus_keyphrase": {
+      "type": "string"
+    },
+    "canonical_url": {
+      "type": "string"
+    },
+    "robots": {
+      "type": "enumeration",
+      "enum": [
+        "index_follow",
+        "index_nofollow",
+        "noindex_follow",
+        "noindex_nofollow"
+      ],
+      "default": "index_follow"
+    },
+    "og_image": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "media_gallery": {
+      "type": "media",
+      "multiple": true,
+      "required": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "video_url": {
+      "type": "string"
+    },
+    "product_visibility": {
+      "type": "enumeration",
+      "enum": [
+        "public",
+        "b2b_only",
+        "private"
+      ],
+      "default": "public"
+    },
+    "price_display": {
+      "type": "string"
+    },
+    "inventory_status": {
+      "type": "enumeration",
+      "enum": [
+        "in_stock",
+        "low_stock",
+        "out_of_stock",
+        "backorder"
+      ]
+    },
+    "sync_origin": {
+      "type": "enumeration",
+      "enum": [
+        "medusa",
+        "strapi",
+        "system"
+      ]
+    },
+    "sync_correlation_id": {
+      "type": "string"
+    },
+    "last_synced_at": {
+      "type": "datetime"
+    },
+    "last_synced_by": {
+      "type": "string"
+    },
+    "sync_status": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "synced",
+        "failed",
+        "conflict"
+      ],
+      "default": "pending"
+    },
+    "last_error": {
+      "type": "text"
+    }
+  }
+}

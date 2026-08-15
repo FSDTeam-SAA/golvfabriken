@@ -1,0 +1,148 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: ${{ github.repository_owner }}
+  TAG: ${{ github.sha }}
+
+jobs:
+  build:
+    name: Build & push (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - app: medusa
+            context: ./golvfabriken-backend
+            dockerfile: ./golvfabriken-backend/apps/backend/Dockerfile
+          - app: storefront
+            context: ./golvfabriken-backend/apps/storefront
+            dockerfile: ./golvfabriken-backend/apps/storefront/Dockerfile
+          - app: strapi
+            context: ./golvfabriken-cms
+            dockerfile: ./golvfabriken-cms/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lowercase owner
+        id: owner
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/golvfabriken-${{ matrix.app }}:main
+            ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/golvfabriken-${{ matrix.app }}:${{ env.TAG }}
+          cache-from: type=gha,scope=${{ matrix.app }}-prod
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}-prod
+          build-args: |
+            VITE_MEDUSA_BACKEND_URL=${{ secrets.PROD_VITE_MEDUSA_BACKEND_URL }}
+            VITE_MEDUSA_PUBLISHABLE_KEY=${{ secrets.PROD_VITE_MEDUSA_PUBLISHABLE_KEY }}
+
+  deploy:
+    name: Deploy to VPS
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lowercase owner
+        id: owner
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          # VPS_SSH_KEY is base64-encoded to avoid CRLF / whitespace corruption
+          # when pasted into the GitHub web UI from a Windows browser.
+          echo "${{ secrets.VPS_SSH_KEY }}" | base64 -d > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Sync compose + caddy + deploy assets
+        run: |
+          rsync -az --delete \
+            --include='docker-compose.prod.yml' \
+            --include='docker-compose.caddy.yml' \
+            --include='deploy/***' \
+            --exclude='*' \
+            ./ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/srv/golvfabriken/prod/"
+
+      - name: Deploy
+        env:
+          MEDUSA_IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/golvfabriken-medusa:${{ env.TAG }}
+          STRAPI_IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/golvfabriken-strapi:${{ env.TAG }}
+          STOREFRONT_IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/golvfabriken-storefront:${{ env.TAG }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          ssh "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            MEDUSA_IMAGE="$MEDUSA_IMAGE" \
+            STRAPI_IMAGE="$STRAPI_IMAGE" \
+            STOREFRONT_IMAGE="$STOREFRONT_IMAGE" \
+            GHCR_TOKEN="$GHCR_TOKEN" \
+            GHCR_USER="$GHCR_USER" \
+            'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /srv/golvfabriken/prod
+
+          # Update image tags in .env (preserves all other values).
+          sed -i \
+            -e "s|^MEDUSA_IMAGE=.*|MEDUSA_IMAGE=${MEDUSA_IMAGE}|" \
+            -e "s|^STRAPI_IMAGE=.*|STRAPI_IMAGE=${STRAPI_IMAGE}|" \
+            -e "s|^STOREFRONT_IMAGE=.*|STOREFRONT_IMAGE=${STOREFRONT_IMAGE}|" \
+            .env
+
+          # Ensure the shared web network exists (idempotent).
+          docker network inspect web >/dev/null 2>&1 || docker network create web
+
+          # Login to GHCR so docker compose pull can read private images.
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+          # Bring up Caddy if not already running.
+          docker compose -f docker-compose.caddy.yml --env-file .env up -d
+
+          # Pull new images, recreate services, run migrations.
+          docker compose -f docker-compose.prod.yml --env-file .env pull
+          docker compose -f docker-compose.prod.yml --env-file .env up -d
+
+          # Wait for Medusa to be healthy, then run migrations.
+          for i in $(seq 1 30); do
+            if docker compose -f docker-compose.prod.yml --env-file .env exec -T medusa-backend wget -q -O- http://127.0.0.1:9000/health >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          docker compose -f docker-compose.prod.yml --env-file .env exec -T medusa-backend npx medusa db:migrate
+
+          docker image prune -af --filter "until=72h" || true
+          REMOTE

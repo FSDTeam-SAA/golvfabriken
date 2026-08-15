@@ -1,0 +1,45 @@
+# Shared Caddy reverse proxy for both prod and staging stacks.
+# Joins the external `web` network that prod and staging stacks also join.
+# Bring-up order: create network → up this stack → up prod/staging stacks.
+#
+#   docker network create web
+#   docker compose -f docker-compose.caddy.yml up -d
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#   docker compose -f docker-compose.staging.yml --env-file .env.staging up -d
+
+services:
+  caddy:
+    build:
+      context: ./deploy/caddy
+    image: golvfabriken/caddy:local
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      ROOT_DOMAIN: ${ROOT_DOMAIN:?ROOT_DOMAIN is required}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - web
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  web:
+    external: true
+
+volumes:
+  caddy_data:
+    name: golvfabriken_caddy_data
+  caddy_config:
+    name: golvfabriken_caddy_config

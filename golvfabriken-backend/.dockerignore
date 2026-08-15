@@ -1,0 +1,16 @@
+**/node_modules
+**/.medusa
+**/dist
+**/.next
+**/.cache
+**/.turbo
+**/.output
+**/.vite
+**/coverage
+**/.git
+**/.gitignore
+**/.env
+**/.env.*
+**/*.log
+**/Dockerfile
+**/.dockerignore

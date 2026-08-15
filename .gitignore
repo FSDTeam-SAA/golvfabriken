@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.template
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.template
+
+# Build output
+dist/
+build/
+coverage/
+*.tsbuildinfo
+**/.next/
+**/out/
+**/.medusa/
+.turbo/
+
+# Local infrastructure data
+postgres_data/
+redis_data/
+
+# Editor and OS files
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
