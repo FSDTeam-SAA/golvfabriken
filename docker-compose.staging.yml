@@ -2,6 +2,9 @@
 # Shares the `web` external network with the prod stack so the same Caddy routes both.
 #
 # Required env file: .env.staging
+#
+# LOCAL-DEV NOTE: ports: blocks were added below (9000/1337/8000) so services are
+# reachable at localhost from a browser when running this outside the VPS/Caddy.
 
 services:
   postgres:
@@ -60,6 +63,8 @@ services:
       STRAPI_API_TOKEN: ${STRAPI_API_TOKEN}
       STRAPI_WEBHOOK_SECRET: ${STRAPI_WEBHOOK_SECRET}
       MEDUSA_ADMIN_BACKEND_URL: ${MEDUSA_BACKEND_URL}
+    ports:
+      - "9000:9000"
     networks:
       - internal
       - web
@@ -111,6 +116,8 @@ services:
       R2_BUCKET: ${R2_BUCKET}
       R2_ENDPOINT: ${R2_ENDPOINT}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL}
+    ports:
+      - "1337:1337"
     networks:
       - internal
       - web
@@ -128,6 +135,8 @@ services:
       VITE_MEDUSA_BACKEND_URL: ${VITE_MEDUSA_BACKEND_URL}
       VITE_MEDUSA_PUBLISHABLE_KEY: ${VITE_MEDUSA_PUBLISHABLE_KEY}
       MEDUSA_BACKEND_URL_INTERNAL: http://medusa-backend-staging:9000
+    ports:
+      - "8000:8000"
     networks:
       - web
       - internal
