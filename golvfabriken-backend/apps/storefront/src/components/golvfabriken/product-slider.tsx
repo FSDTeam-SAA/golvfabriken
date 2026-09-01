@@ -22,6 +22,7 @@ interface ProductSliderProps {
   subtitle?: string;
   viewAllLink?: string;
   viewAllText?: string;
+  countryCode?: string;
 }
 
 export function ProductSlider({
@@ -30,6 +31,7 @@ export function ProductSlider({
   subtitle,
   viewAllLink,
   viewAllText = "Se alla produkter",
+  countryCode = "se",
 }: ProductSliderProps) {
   return (
     <section className="py-16 md:py-24 bg-white">
@@ -59,7 +61,7 @@ export function ProductSlider({
               <Link
                 key={product.id}
                 to="/$countryCode/products/$handle"
-                params={{ countryCode: "se", handle: product.handle }}
+                params={{ countryCode, handle: product.handle }}
                 className="group card-gf overflow-hidden"
               >
                 <div className="relative aspect-square overflow-hidden bg-golvfabriken-beige-100">
