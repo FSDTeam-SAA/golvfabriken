@@ -8,6 +8,8 @@ import { useAddToCart } from "@/lib/hooks/use-cart"
 import { getVariantOptionsKeymap, isVariantInStock } from "@/lib/utils/product"
 import { getCountryCodeFromPath } from "@/lib/utils/region"
 import { getFlooringProductMetadata } from "@/lib/utils/product-metadata"
+import { PackagesNeededOutput } from "@/lib/utils/packages-needed"
+import { Minus, Plus } from "@medusajs/icons"
 import { HttpTypes } from "@medusajs/types"
 import { useLocation } from "@tanstack/react-router"
 import { isEqual } from "lodash-es"
@@ -30,6 +32,7 @@ const ProductActions = memo(function ProductActions({
     Record<string, string | undefined>
   >({})
   const [quantity, setQuantity] = useState(1)
+  const [calcDetails, setCalcDetails] = useState<PackagesNeededOutput | null>(null)
   const location = useLocation()
   const countryCode = getCountryCodeFromPath(location.pathname) || "dk"
 
@@ -98,7 +101,6 @@ const ProductActions = memo(function ProductActions({
 
   // check if the selected variant is in stock
   const inStock = useMemo(() => {
-    // If no variant is selected, we can't add to cart
     if (!selectedVariant) {
       return false
     }
@@ -106,15 +108,39 @@ const ProductActions = memo(function ProductActions({
     return isVariantInStock(selectedVariant)
   }, [selectedVariant])
 
+  // Flooring metadata
+  const flooringMetadata = useMemo(() => {
+    return getFlooringProductMetadata(
+      product.metadata,
+      selectedVariant?.metadata
+    )
+  }, [product.metadata, selectedVariant?.metadata])
+
+  const isFlooring = Boolean(flooringMetadata.m2PerPackage && flooringMetadata.m2PerPackage > 0)
+
   // add the selected variant to the cart
   const handleAddToCart = async () => {
     if (!selectedVariant?.id) return null
+
+    const metadata: Record<string, unknown> = isFlooring
+      ? {
+          is_flooring: true,
+          m2_per_package: flooringMetadata.m2PerPackage,
+          desired_m2: calcDetails?.desiredM2 || null,
+          waste_pct: calcDetails?.wastePercentage || 10,
+          total_m2_coverage: Number((quantity * (flooringMetadata.m2PerPackage || 1)).toFixed(2)),
+          unit: "paket",
+        }
+      : {
+          is_flooring: false,
+        }
 
     addToCartMutation.mutateAsync(
       {
         variant_id: selectedVariant.id,
         quantity: quantity,
         country_code: countryCode,
+        metadata,
         product,
         variant: selectedVariant,
         region,
@@ -127,17 +153,12 @@ const ProductActions = memo(function ProductActions({
     )
   }
 
-  // Flooring metadata is shared by comparison price, calculator, and shipping planning.
-  const flooringMetadata = useMemo(() => {
-    return getFlooringProductMetadata(
-      product.metadata,
-      selectedVariant?.metadata
-    )
-  }, [product.metadata, selectedVariant?.metadata])
-
   // Handle calculator quantity update
-  const handleQuantityFromCalculator = (qty: number) => {
+  const handleQuantityFromCalculator = (qty: number, details?: PackagesNeededOutput | null) => {
     setQuantity(qty)
+    if (details) {
+      setCalcDetails(details)
+    }
   }
 
   return (
@@ -150,11 +171,53 @@ const ProductActions = memo(function ProductActions({
         }}
       />
 
-      <M2Calculator
-        m2PerPackage={flooringMetadata.m2PerPackage}
-        defaultWastePercentage={flooringMetadata.wastePct}
-        onQuantityChange={handleQuantityFromCalculator}
-      />
+      {/* If flooring product: show M² Calculator */}
+      {isFlooring && (
+        <M2Calculator
+          m2PerPackage={flooringMetadata.m2PerPackage}
+          defaultWastePercentage={flooringMetadata.wastePct}
+          quantity={quantity}
+          onQuantityChange={handleQuantityFromCalculator}
+        />
+      )}
+
+      {/* If non-flooring product (Fallback): show standard quantity selector */}
+      {!isFlooring && (
+        <div className="flex items-center justify-between p-3.5 bg-golvfabriken-beige-50 border border-golvfabriken-beige-300 rounded-xl">
+          <span className="text-sm font-semibold text-golvfabriken-graphite">
+            {t('product.quantity')}
+          </span>
+          <div className="flex items-center gap-1 bg-white border border-golvfabriken-beige-300 rounded-lg p-1">
+            <button
+              type="button"
+              onClick={() => setQuantity(Math.max(1, quantity - 1))}
+              disabled={quantity <= 1}
+              className="w-8 h-8 rounded-md hover:bg-golvfabriken-beige-100 disabled:opacity-40 disabled:cursor-not-allowed text-golvfabriken-graphite flex items-center justify-center font-bold transition-colors"
+              aria-label="Decrease quantity"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <input
+              type="number"
+              min="1"
+              value={quantity}
+              onChange={(e) => {
+                const val = parseInt(e.target.value)
+                if (!isNaN(val) && val > 0) setQuantity(val)
+              }}
+              className="w-12 text-center text-sm font-bold bg-transparent text-golvfabriken-graphite focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => setQuantity(quantity + 1)}
+              className="w-8 h-8 rounded-md hover:bg-golvfabriken-beige-100 text-golvfabriken-graphite flex items-center justify-center font-bold transition-colors"
+              aria-label="Increase quantity"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {(product.variants?.length ?? 0) > 1 && (
         <div className="flex flex-col gap-y-4">
@@ -193,3 +256,4 @@ const ProductActions = memo(function ProductActions({
 })
 
 export default ProductActions
+

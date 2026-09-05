@@ -26,7 +26,7 @@ const toNumber = (value: unknown) => {
 const normalizeWastePct = (value: unknown) => {
   const numeric = Math.round(toNumber(value));
 
-  if ([5, 10, 15].includes(numeric)) {
+  if ([0, 5, 10, 15].includes(numeric)) {
     return numeric;
   }
 

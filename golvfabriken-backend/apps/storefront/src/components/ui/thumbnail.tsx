@@ -1,4 +1,5 @@
 import { clsx } from "clsx"
+import { normalizeImageUrl } from "@/lib/utils/image"
 
 type ThumbnailProps = {
   thumbnail?: string | null;
@@ -7,11 +8,13 @@ type ThumbnailProps = {
 };
 
 export const Thumbnail = ({ thumbnail, alt, className }: ThumbnailProps) => {
+  const normalized = normalizeImageUrl(thumbnail)
+
   return (
     <>
-      {thumbnail ? (
+      {normalized ? (
         <img
-          src={thumbnail}
+          src={normalized}
           alt={alt}
           className={clsx("w-20 h-20 object-cover bg-zinc-50", className)}
         />

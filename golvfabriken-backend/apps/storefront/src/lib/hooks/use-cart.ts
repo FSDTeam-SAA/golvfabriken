@@ -14,7 +14,7 @@ import {
   createOptimisticCart,
 } from "@/lib/utils/cart"
 
-const DEFAULT_CART_FIELDS = "+items.total, shipping_methods.name"
+const DEFAULT_CART_FIELDS = "+items.total, +items.metadata, +items.product.metadata, +items.variant.metadata, shipping_methods.name"
 
 export const useCart = ({ fields }: { fields?: string } = {}) => {
   return useQuery({
@@ -78,11 +78,12 @@ export const useAddToCart = ({ fields }: { fields?: string } = {}) => {
       quantity: number;
       country_code: string;
       fields?: string;
+      metadata?: Record<string, unknown>;
       product?: HttpTypes.StoreProduct;
       variant?: HttpTypes.StoreProductVariant;
       region?: HttpTypes.StoreRegion;
     }) => {
-      const { variant_id, quantity, country_code, fields: requestFields } = variables
+      const { variant_id, quantity, country_code, metadata, fields: requestFields } = variables
       if (!variant_id) throw new Error("Missing variant ID when adding to cart")
 
       let cartId = getStoredCart()
@@ -102,7 +103,7 @@ export const useAddToCart = ({ fields }: { fields?: string } = {}) => {
 
       const response = await sdk.store.cart.createLineItem(
         cartId,
-        { variant_id, quantity },
+        { variant_id, quantity, metadata },
         { fields: requestFields || fields || DEFAULT_CART_FIELDS }
       )
       return response.cart

@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight } from "@medusajs/icons"
 import { HttpTypes } from "@medusajs/types"
 import { useState, useCallback, memo } from "react"
+import { normalizeImageUrl } from "@/lib/utils/image"
 
 type ImageGalleryProps = {
   images: HttpTypes.StoreProductImage[]
@@ -31,15 +32,16 @@ const ImageGallery = memo(function ImageGallery({ images }: ImageGalleryProps) {
             {images.map((image, index) => {
               const isFirstImage = index === 0
               const isCriticalImage = index <= 1
+              const normalizedSrc = normalizeImageUrl(image.url)
               
               return (
                 <div
                   key={image.id}
                   className="w-full h-full flex-shrink-0 relative"
                 >
-                  {!!image.url && (
+                  {!!normalizedSrc && (
                     <img
-                      src={image.url}
+                      src={normalizedSrc}
                       className="absolute inset-0 w-full h-full object-cover"
                       alt={isFirstImage ? "Main product image" : `Product image ${index + 1}`}
                       loading={isCriticalImage ? "eager" : "lazy"}
