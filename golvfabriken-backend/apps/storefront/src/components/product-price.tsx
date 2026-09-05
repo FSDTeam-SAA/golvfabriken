@@ -3,7 +3,9 @@ import { Loading } from "@/components/ui/loading"
 import { Price, PriceProps } from "@/components/ui/price"
 import { getProductComparisonPrice } from "@/lib/utils/comparison-price"
 import { getProductPrice } from "@/lib/utils/price"
+import { getFlooringProductMetadata } from "@/lib/utils/product-metadata"
 import { HttpTypes } from "@medusajs/types"
+import { useTranslation } from "@/lib/hooks/use-translation"
 
 export default function ProductPrice({
   product,
@@ -16,6 +18,7 @@ export default function ProductPrice({
   className?: string
   priceProps?: Partial<PriceProps>
 }) {
+  const { t } = useTranslation()
   const { cheapestPrice, variantPrice } = getProductPrice({
     product,
     variant_id: variant?.id,
@@ -27,23 +30,43 @@ export default function ProductPrice({
     return <Loading rows={1} />
   }
 
+  // Check flooring metadata
+  const flooringMeta = getFlooringProductMetadata(
+    product.metadata,
+    variant?.metadata
+  )
+  const isFlooring = Boolean(flooringMeta.m2PerPackage && flooringMeta.m2PerPackage > 0)
+
   // Get comparison price (price per m²)
-  const comparisonPrice = getProductComparisonPrice(product, variant)
+  const comparisonPrice = isFlooring
+    ? getProductComparisonPrice(product, variant)
+    : null
 
   return (
-    <div className="flex flex-col gap-1">
-      <Price
-        price={selectedPrice.calculated_price}
-        currencyCode={selectedPrice.currency_code}
-        type={variant ? "default" : "range"}
-        className={className}
-        originalPrice={selectedPrice.price_type === "sale" ? {
-          price: selectedPrice.original_price,
-          percentage: selectedPrice.percentage_diff,
-        } : undefined}
-        {...priceProps}
-      />
-      <ComparisonPrice comparisonPrice={comparisonPrice} />
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <Price
+          price={selectedPrice.calculated_price}
+          currencyCode={selectedPrice.currency_code}
+          type={variant ? "default" : "range"}
+          className={className}
+          originalPrice={selectedPrice.price_type === "sale" ? {
+            price: selectedPrice.original_price,
+            percentage: selectedPrice.percentage_diff,
+          } : undefined}
+          {...priceProps}
+        />
+        {isFlooring && (
+          <span className="text-sm font-normal text-golvfabriken-graphite/60">
+            {t("comparison.perPackageAbbr")}
+            {flooringMeta.m2PerPackage ? ` (${flooringMeta.m2PerPackage} m²)` : ""}
+          </span>
+        )}
+      </div>
+
+      {isFlooring && comparisonPrice && (
+        <ComparisonPrice comparisonPrice={comparisonPrice} />
+      )}
     </div>
   )
 }

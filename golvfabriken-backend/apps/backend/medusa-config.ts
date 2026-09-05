@@ -19,6 +19,20 @@ module.exports = defineConfig({
   },
   modules: [
     {
+      resolve: "@medusajs/medusa/file",
+      options: {
+        providers: [
+          {
+            resolve: "@medusajs/medusa/file-local",
+            id: "local",
+            options: {
+              backendUrl: (process.env.MEDUSA_BACKEND_URL || "http://localhost:9002") + "/static",
+            },
+          },
+        ],
+      },
+    },
+    {
       resolve: "./src/modules/sync",
     },
     {

@@ -152,7 +152,31 @@ interface CartLineItemProps {
   className?: string
 }
 
+const getLineItemFlooringData = (item: HttpTypes.StoreCartLineItem | HttpTypes.StoreOrderLineItem) => {
+  const m2PerPackage = Number(
+    item.metadata?.m2_per_package ??
+    item.variant?.metadata?.m2_per_package ??
+    item.product?.metadata?.m2_per_package ??
+    (item as any).variant?.product?.metadata?.m2_per_package ??
+    0
+  )
+  const isFlooring = m2PerPackage > 0
+  const totalCoverage = isFlooring ? Number((item.quantity * m2PerPackage).toFixed(2)) : null
+  const unitPrice = item.unit_price || (item.total && item.quantity ? item.total / item.quantity : 0)
+  const pricePerM2 = isFlooring && unitPrice ? unitPrice / m2PerPackage : null
+
+  return {
+    isFlooring,
+    m2PerPackage,
+    totalCoverage,
+    unitPrice,
+    pricePerM2,
+  }
+}
+
 const CompactCartLineItem = ({ item, cart, fields }: CartLineItemProps) => {
+  const { isFlooring, m2PerPackage, totalCoverage, pricePerM2 } = getLineItemFlooringData(item)
+
   return (
     <div className="flex items-start gap-x-4" data-testid="cart-item">
       <Thumbnail thumbnail={item.thumbnail} alt={item.product_title || item.title} />
@@ -167,13 +191,26 @@ const CompactCartLineItem = ({ item, cart, fields }: CartLineItemProps) => {
                 <span>{item.variant_title}</span>
               )}
             </div>
+
+            {isFlooring && (
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-golvfabriken-green/10 text-golvfabriken-green">
+                  {item.quantity} paket • {totalCoverage} m²
+                </span>
+                {pricePerM2 && (
+                  <span className="text-[11px] text-zinc-500">
+                    ({pricePerM2.toFixed(2)} kr/m²)
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <CartDeleteItem item={item} fields={fields} />
         </div>
 
-        <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center justify-between mt-2.5">
           <CartItemQuantitySelector item={item} fields={fields} />
-          <Price price={item.total || 0} currencyCode={cart.currency_code} textSize="small" />
+          <Price price={item.total || 0} currencyCode={cart.currency_code} textSize="small" textWeight="plus" />
         </div>
       </div>
     </div>
@@ -182,6 +219,7 @@ const CompactCartLineItem = ({ item, cart, fields }: CartLineItemProps) => {
 
 const DisplayCartLineItem = ({ item, cart, className }: CartLineItemProps) => {
   const { t } = useTranslation()
+  const { isFlooring, m2PerPackage, totalCoverage, pricePerM2 } = getLineItemFlooringData(item)
   
   return (
     <div
@@ -200,7 +238,19 @@ const DisplayCartLineItem = ({ item, cart, className }: CartLineItemProps) => {
         {item.variant_title && item.variant_title !== "Default Variant" && (
           <p className="text-sm text-zinc-600">{item.variant_title}</p>
         )}
-        <p className="text-sm text-zinc-600">{t('cart.quantity')}: {item.quantity}</p>
+        
+        {isFlooring ? (
+          <div className="mt-0.5 space-y-0.5">
+            <p className="text-xs font-semibold text-golvfabriken-green">
+              {item.quantity} paket ({totalCoverage} m² totalt)
+            </p>
+            <p className="text-[11px] text-zinc-500">
+              {m2PerPackage} m²/paket {pricePerM2 ? `• ${pricePerM2.toFixed(2)} kr/m²` : ""}
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-zinc-600">{t('cart.quantity')}: {item.quantity}</p>
+        )}
       </div>
       <div className="text-right">
         <Price price={item.total || 0} currencyCode={cart.currency_code} textWeight="plus" />
@@ -216,6 +266,8 @@ export const CartLineItem = ({
   fields,
   className,
 }: CartLineItemProps) => {
+  const { isFlooring, m2PerPackage, totalCoverage, pricePerM2, unitPrice } = getLineItemFlooringData(item)
+
   if (type === "compact") {
     return <CompactCartLineItem item={item} cart={cart} fields={fields} className={className} />
   }
@@ -235,13 +287,34 @@ export const CartLineItem = ({
         {item.variant_title && item.variant_title !== "Default Variant" && (
           <span className="text-zinc-600 text-sm">{item.variant_title}</span>
         )}
+
+        {isFlooring && (
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-golvfabriken-green/10 text-golvfabriken-green">
+              {item.quantity} paket ({totalCoverage} m²)
+            </span>
+            <span className="text-xs text-zinc-500">
+              Paketstorlek: {m2PerPackage} m² {pricePerM2 ? `• ${pricePerM2.toFixed(2)} kr/m²` : ""}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-4">
-        <CartItemQuantitySelector item={item} fields={fields} />
+        <div className="flex flex-col items-center">
+          <CartItemQuantitySelector item={item} fields={fields} />
+          {isFlooring && (
+            <span className="text-[11px] text-zinc-500 font-medium mt-0.5">paket</span>
+          )}
+        </div>
 
         <div className="text-right">
           <LineItemPrice item={item} currencyCode={cart.currency_code} />
+          {isFlooring && pricePerM2 && (
+            <span className="block text-xs text-zinc-500 font-medium mt-0.5">
+              {pricePerM2.toFixed(2)} kr/m²
+            </span>
+          )}
         </div>
 
         <CartDeleteItem item={item} fields={fields} />
