@@ -74,16 +74,10 @@ const DeliveryStep = ({ cart, onNext, onBack }: DeliveryStepProps) => {
         }
       }
 
-      await setShippingMethodMutation.mutateAsync(
-        {
-          shipping_option_id: selectedOptionId,
-        },
-        {
-          onSuccess: () => {
-            onNext()
-          },
-        }
-      )
+      await setShippingMethodMutation.mutateAsync({
+        shipping_option_id: selectedOptionId,
+      })
+      onNext()
     } catch (error) {
       setAddressValidationMessage(
         error instanceof Error
