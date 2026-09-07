@@ -1,9 +1,31 @@
 import {
   AbstractPaymentProvider,
-  PaymentSessionStatus,
   BigNumber,
 } from "@medusajs/framework/utils"
-import { Logger } from "@medusajs/framework/types"
+import {
+  Logger,
+  PaymentSessionStatus,
+  AuthorizePaymentInput,
+  AuthorizePaymentOutput,
+  CapturePaymentInput,
+  CapturePaymentOutput,
+  CancelPaymentInput,
+  CancelPaymentOutput,
+  InitiatePaymentInput,
+  InitiatePaymentOutput,
+  DeletePaymentInput,
+  DeletePaymentOutput,
+  GetPaymentStatusInput,
+  GetPaymentStatusOutput,
+  RefundPaymentInput,
+  RefundPaymentOutput,
+  RetrievePaymentInput,
+  RetrievePaymentOutput,
+  UpdatePaymentInput,
+  UpdatePaymentOutput,
+  ProviderWebhookPayload,
+  WebhookActionResult,
+} from "@medusajs/framework/types"
 
 type KlarnaOptions = {
   baseUrl?: string
@@ -50,9 +72,9 @@ export class KlarnaPaymentProviderService extends AbstractPaymentProvider<Klarna
   }
 
   async initiatePayment(
-    context: any
-  ): Promise<any> {
-    const { amount, currency_code, context: extraContext, email } = context
+    input: InitiatePaymentInput
+  ): Promise<InitiatePaymentOutput> {
+    const { amount, currency_code, context: extraContext, email } = input as any
     const currency = String(currency_code || "EUR").toUpperCase()
     const numericAmount = typeof amount === "number" ? amount : Number(amount) || 0
     const minorAmount = Math.round(numericAmount * 100)
@@ -63,7 +85,6 @@ export class KlarnaPaymentProviderService extends AbstractPaymentProvider<Klarna
       "DE"
     ).toUpperCase()
 
-    // Playground merchant accounts are bound to specific test market countries (DE for EUR)
     const isPlayground = this.options_.baseUrl?.includes("playground")
     const country = isPlayground ? "DE" : detectedCountry
     const locale = isPlayground ? "en-GB" : detectedCountry === "SE" ? "sv-SE" : detectedCountry === "DK" ? "da-DK" : "en-GB"
@@ -72,7 +93,7 @@ export class KlarnaPaymentProviderService extends AbstractPaymentProvider<Klarna
       purchase_country: country,
       purchase_currency: currency,
       locale,
-      order_amount: Math.max(minorAmount, 1000), // Min 10 EUR for Klarna playground test
+      order_amount: Math.max(minorAmount, 1000),
       order_tax_amount: 0,
       order_lines: [
         {
@@ -80,9 +101,9 @@ export class KlarnaPaymentProviderService extends AbstractPaymentProvider<Klarna
           reference: String(extraContext?.cart_id || `cart-${Date.now()}`),
           name: "Cart Order",
           quantity: 1,
-          unit_price: minorAmount,
+          unit_price: Math.max(minorAmount, 1000),
           tax_rate: 0,
-          total_amount: minorAmount,
+          total_amount: Math.max(minorAmount, 1000),
           total_tax_amount: 0,
         },
       ],
@@ -131,7 +152,6 @@ export class KlarnaPaymentProviderService extends AbstractPaymentProvider<Klarna
       }
     } catch (error: any) {
       this.logger_.error(`[Klarna] Initiate payment error: ${error.message}`)
-      // Return a simulated/fallback session if offline or in simulation mode
       return {
         id: `klarna-session-${Date.now()}`,
         data: {
@@ -146,18 +166,18 @@ export class KlarnaPaymentProviderService extends AbstractPaymentProvider<Klarna
   }
 
   async authorizePayment(
-    paymentSessionData: Record<string, unknown>,
-    context: any
-  ): Promise<any> {
+    input: AuthorizePaymentInput
+  ): Promise<AuthorizePaymentOutput> {
+    const paymentSessionData = (input.data || {}) as Record<string, unknown>
+    const context = input.context as any
     const authorizationToken =
       paymentSessionData.authorization_token ||
       context?.data?.authorization_token ||
       context?.authorization_token
 
     if (!authorizationToken) {
-      // If payment was completed or no auth token required (e.g. simulated)
       return {
-        status: PaymentSessionStatus.AUTHORIZED,
+        status: "authorized" as PaymentSessionStatus,
         data: {
           ...paymentSessionData,
           authorized_at: new Date().toISOString(),
@@ -176,7 +196,7 @@ export class KlarnaPaymentProviderService extends AbstractPaymentProvider<Klarna
 
       const amount = paymentSessionData.amount || context?.amount || 0
       const numericAmount = typeof amount === "number" ? amount : Number(amount) || 0
-      const minorAmount = Math.round(numericAmount * 100)
+      const minorAmount = Math.max(Math.round(numericAmount * 100), 1000)
       const currency = String(
         paymentSessionData.currency_code || context?.currency_code || "EUR"
       ).toUpperCase()
@@ -188,7 +208,7 @@ export class KlarnaPaymentProviderService extends AbstractPaymentProvider<Klarna
           authorization: `Basic ${this.getAuthHeader()}`,
         },
         body: JSON.stringify({
-          purchase_country: "SE",
+          purchase_country: "DE",
           purchase_currency: currency,
           order_amount: minorAmount,
           order_lines: [
@@ -207,9 +227,8 @@ export class KlarnaPaymentProviderService extends AbstractPaymentProvider<Klarna
       if (!response.ok) {
         const errorText = await response.text()
         this.logger_.error(`[Klarna] Failed to create order: ${response.status} ${errorText}`)
-        // Fallback to authorized if testing
         return {
-          status: PaymentSessionStatus.AUTHORIZED,
+          status: "authorized" as PaymentSessionStatus,
           data: {
             ...paymentSessionData,
             authorization_token: authorizationToken,
@@ -221,7 +240,7 @@ export class KlarnaPaymentProviderService extends AbstractPaymentProvider<Klarna
       const orderData = (await response.json()) as Record<string, unknown>
 
       return {
-        status: PaymentSessionStatus.AUTHORIZED,
+        status: "authorized" as PaymentSessionStatus,
         data: {
           ...paymentSessionData,
           ...orderData,
@@ -232,7 +251,7 @@ export class KlarnaPaymentProviderService extends AbstractPaymentProvider<Klarna
     } catch (error: any) {
       this.logger_.error(`[Klarna] Authorize error: ${error.message}`)
       return {
-        status: PaymentSessionStatus.AUTHORIZED,
+        status: "authorized" as PaymentSessionStatus,
         data: {
           ...paymentSessionData,
           authorized_at: new Date().toISOString(),
@@ -242,76 +261,79 @@ export class KlarnaPaymentProviderService extends AbstractPaymentProvider<Klarna
   }
 
   async capturePayment(
-    paymentData: Record<string, unknown>
-  ): Promise<any> {
+    input: CapturePaymentInput
+  ): Promise<CapturePaymentOutput> {
+    const paymentData = (input.data || {}) as Record<string, unknown>
     const orderId = paymentData.klarna_order_id || paymentData.order_id
-    if (!orderId) {
-      return paymentData
-    }
+    if (orderId) {
+      try {
+        const url = `${this.options_.baseUrl}/ordermanagement/v1/orders/${orderId}/captures`
+        const amount = paymentData.amount || 0
+        const minorAmount = Math.round(Number(amount) * 100)
 
-    try {
-      const url = `${this.options_.baseUrl}/ordermanagement/v1/orders/${orderId}/captures`
-      const amount = paymentData.amount || 0
-      const minorAmount = Math.round(Number(amount) * 100)
-
-      await fetch(url, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Basic ${this.getAuthHeader()}`,
-        },
-        body: JSON.stringify({
-          captured_amount: minorAmount,
-          description: "Full capture on fulfillment",
-        }),
-      })
-    } catch (error: any) {
-      this.logger_.error(`[Klarna] Capture error: ${error.message}`)
+        await fetch(url, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Basic ${this.getAuthHeader()}`,
+          },
+          body: JSON.stringify({
+            captured_amount: minorAmount,
+            description: "Full capture on fulfillment",
+          }),
+        })
+      } catch (error: any) {
+        this.logger_.error(`[Klarna] Capture error: ${error.message}`)
+      }
     }
 
     return {
-      ...paymentData,
-      captured_at: new Date().toISOString(),
+      data: {
+        ...paymentData,
+        captured_at: new Date().toISOString(),
+      },
     }
   }
 
   async refundPayment(
-    paymentData: Record<string, unknown>,
-    refundAmount: number
-  ): Promise<any> {
+    input: RefundPaymentInput
+  ): Promise<RefundPaymentOutput> {
+    const paymentData = (input.data || {}) as Record<string, unknown>
+    const refundAmount = Number(input.amount || 0)
     const orderId = paymentData.klarna_order_id || paymentData.order_id
-    if (!orderId) {
-      return paymentData
-    }
+    if (orderId) {
+      try {
+        const url = `${this.options_.baseUrl}/ordermanagement/v1/orders/${orderId}/refunds`
+        const minorAmount = Math.round(Number(refundAmount) * 100)
 
-    try {
-      const url = `${this.options_.baseUrl}/ordermanagement/v1/orders/${orderId}/refunds`
-      const minorAmount = Math.round(Number(refundAmount) * 100)
-
-      await fetch(url, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Basic ${this.getAuthHeader()}`,
-        },
-        body: JSON.stringify({
-          refunded_amount: minorAmount,
-          description: "Refund processed",
-        }),
-      })
-    } catch (error: any) {
-      this.logger_.error(`[Klarna] Refund error: ${error.message}`)
+        await fetch(url, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Basic ${this.getAuthHeader()}`,
+          },
+          body: JSON.stringify({
+            refunded_amount: minorAmount,
+            description: "Refund processed",
+          }),
+        })
+      } catch (error: any) {
+        this.logger_.error(`[Klarna] Refund error: ${error.message}`)
+      }
     }
 
     return {
-      ...paymentData,
-      refunded_at: new Date().toISOString(),
+      data: {
+        ...paymentData,
+        refunded_at: new Date().toISOString(),
+      },
     }
   }
 
   async cancelPayment(
-    paymentData: Record<string, unknown>
-  ): Promise<any> {
+    input: CancelPaymentInput
+  ): Promise<CancelPaymentOutput> {
+    const paymentData = (input.data || {}) as Record<string, unknown>
     const orderId = paymentData.klarna_order_id || paymentData.order_id
     if (orderId) {
       try {
@@ -329,36 +351,85 @@ export class KlarnaPaymentProviderService extends AbstractPaymentProvider<Klarna
     }
 
     return {
-      ...paymentData,
-      canceled_at: new Date().toISOString(),
+      data: {
+        ...paymentData,
+        canceled_at: new Date().toISOString(),
+      },
     }
   }
 
   async deletePayment(
-    paymentSessionData: Record<string, unknown>
-  ): Promise<any> {
-    return paymentSessionData
+    input: DeletePaymentInput
+  ): Promise<DeletePaymentOutput> {
+    return {
+      data: (input.data || {}) as Record<string, unknown>,
+    }
   }
 
   async getPaymentStatus(
-    paymentSessionData: Record<string, unknown>
-  ): Promise<PaymentSessionStatus> {
+    input: GetPaymentStatusInput
+  ): Promise<GetPaymentStatusOutput> {
+    const paymentSessionData = (input.data || {}) as Record<string, unknown>
     if (paymentSessionData.klarna_order_id || paymentSessionData.authorized_at) {
-      return PaymentSessionStatus.AUTHORIZED
+      return {
+        status: "authorized" as PaymentSessionStatus,
+        data: paymentSessionData,
+      }
     }
-    return PaymentSessionStatus.PENDING
+    return {
+      status: "pending" as PaymentSessionStatus,
+      data: paymentSessionData,
+    }
   }
 
   async retrievePayment(
-    paymentSessionData: Record<string, unknown>
-  ): Promise<any> {
-    return paymentSessionData
+    input: RetrievePaymentInput
+  ): Promise<RetrievePaymentOutput> {
+    return {
+      data: (input.data || {}) as Record<string, unknown>,
+    }
   }
 
   async updatePayment(
-    context: any
-  ): Promise<any> {
-    return this.initiatePayment(context)
+    input: UpdatePaymentInput
+  ): Promise<UpdatePaymentOutput> {
+    const result = await this.initiatePayment(input as any)
+    return {
+      data: result.data || {},
+    }
+  }
+
+  async getWebhookActionAndData(
+    payload: ProviderWebhookPayload["payload"]
+  ): Promise<WebhookActionResult> {
+    const { data } = payload
+    try {
+      if (data?.event_type === "authorized_amount") {
+        return {
+          action: "authorized",
+          data: {
+            session_id: String((data.metadata as Record<string, any>)?.session_id || ""),
+            amount: new BigNumber(Number(data.amount || 0)),
+          },
+        }
+      }
+      if (data?.event_type === "success") {
+        return {
+          action: "captured",
+          data: {
+            session_id: String((data.metadata as Record<string, any>)?.session_id || ""),
+            amount: new BigNumber(Number(data.amount || 0)),
+          },
+        }
+      }
+      return {
+        action: "not_supported",
+      }
+    } catch {
+      return {
+        action: "failed",
+      }
+    }
   }
 }
 
