@@ -3,7 +3,7 @@ import { sdk } from "@/lib/utils/sdk"
 import { queryKeys } from "@/lib/utils/query-keys"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-const DEFAULT_CART_FIELDS = "+items.total, shipping_methods.name"
+const DEFAULT_CART_FIELDS = "+items.total, *shipping_methods"
 
 // ============ ADDRESSES ============
 
@@ -92,11 +92,14 @@ export const useSetCartShippingMethod = () => {
       if (!cartId) throw new Error("No cart found")
       const { cart } = await sdk.store.cart.addShippingMethod(
         cartId,
-        { option_id: shipping_option_id, data }
+        { option_id: shipping_option_id, data },
+        {},
+        { fields: DEFAULT_CART_FIELDS }
       )
       return cart
     },
     onSuccess: async (cart) => {
+      queryClient.setQueriesData({ predicate: queryKeys.cart.predicate }, cart)
       queryClient.invalidateQueries({ predicate: queryKeys.cart.predicate })
       queryClient.invalidateQueries({ queryKey: queryKeys.shipping.options(cart.id) })
     },

@@ -16,6 +16,14 @@ export const isKustom = (providerId?: string) => {
   return providerId?.startsWith("pp_kustom_") || providerId === "kustom"
 }
 
+export const isKlarna = (providerId?: string) => {
+  return (
+    providerId?.startsWith("pp_klarna_") ||
+    providerId === "klarna" ||
+    providerId === "pp_klarna"
+  )
+}
+
 // ============ ACTIVE PAYMENT SESSION ============
 
 export const getActivePaymentSession = (cart: HttpTypes.StoreCart): HttpTypes.StorePaymentSession | undefined => {

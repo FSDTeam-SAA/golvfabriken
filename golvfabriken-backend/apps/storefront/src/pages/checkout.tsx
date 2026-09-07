@@ -4,9 +4,8 @@ import { Loading } from "@/components/ui/loading"
 import { useCart } from "@/lib/hooks/use-cart"
 import { type CheckoutStep, CheckoutStepKey } from "@/lib/types/global"
 import {
-  useLoaderData,
-  useLocation,
   useNavigate,
+  useSearch,
 } from "@tanstack/react-router"
 import { lazy, Suspense, useCallback, useEffect, useMemo } from "react"
 import { useTranslation } from "@/lib/hooks/use-translation"
@@ -19,12 +18,13 @@ const CheckoutSummary = lazy(() => import("@/components/checkout-summary"))
 
 const Checkout = () => {
   const { t } = useTranslation()
-  const { step } = useLoaderData({
+  const { step } = useSearch({
     from: "/$countryCode/checkout",
   })
   const { data: cart, isLoading: cartLoading } = useCart()
-  const location = useLocation()
-  const navigate = useNavigate()
+  const navigate = useNavigate({
+    from: "/$countryCode/checkout",
+  })
 
   const steps: CheckoutStep[] = useMemo(() => {
     return [
@@ -60,12 +60,17 @@ const Checkout = () => {
     [step, steps]
   )
 
-  const goToStep = useCallback((step: CheckoutStepKey) => {
-    navigate({
-      to: `${location.pathname}?step=${step}`,
-      replace: true,
-    })
-  }, [location.pathname, navigate])
+  const goToStep = useCallback(
+    (targetStep: CheckoutStepKey) => {
+      navigate({
+        search: () => ({
+          step: targetStep,
+        }),
+        replace: true,
+      })
+    },
+    [navigate]
+  )
 
   useEffect(() => {
     // Determine which step to show based on cart state
@@ -75,7 +80,7 @@ const Checkout = () => {
 
     if (
       step !== CheckoutStepKey.ADDRESSES &&
-      currentStepIndex >= 0 &&
+      currentStepIndex > 0 &&
       steps[0] &&
       !steps[0].completed
     ) {
@@ -85,7 +90,7 @@ const Checkout = () => {
 
     if (
       step !== CheckoutStepKey.DELIVERY &&
-      currentStepIndex >= 1 &&
+      currentStepIndex > 1 &&
       steps[1] &&
       !steps[1].completed
     ) {
@@ -95,14 +100,14 @@ const Checkout = () => {
 
     if (
       step !== CheckoutStepKey.PAYMENT &&
-      currentStepIndex >= 2 &&
+      currentStepIndex > 2 &&
       steps[2] &&
       !steps[2].completed
     ) {
       goToStep(CheckoutStepKey.PAYMENT)
       return
     }
-  }, [cart, steps, location, currentStepIndex, step, goToStep])
+  }, [cart, steps, currentStepIndex, step, goToStep])
 
   const handleNext = () => {
     const nextIndex = currentStepIndex + 1
