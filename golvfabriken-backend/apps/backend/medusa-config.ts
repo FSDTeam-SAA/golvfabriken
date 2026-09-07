@@ -38,5 +38,21 @@ module.exports = defineConfig({
     {
       resolve: "./src/modules/ops",
     },
+    {
+      resolve: "@medusajs/medusa/payment",
+      options: {
+        providers: [
+          {
+            resolve: "./src/modules/payment-klarna",
+            id: "klarna",
+            options: {
+              baseUrl: process.env.KLARNA_API_BASE_URL || "https://api.playground.klarna.com",
+              username: process.env.KLARNA_USERNAME,
+              password: process.env.KLARNA_PASSWORD,
+            },
+          },
+        ],
+      },
+    },
   ],
 })
