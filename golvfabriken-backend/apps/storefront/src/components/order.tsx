@@ -54,7 +54,18 @@ type OrderLineItemProps = {
 
 export const OrderLineItem = ({ item, order }: OrderLineItemProps) => {
   const { t } = useTranslation()
-  
+  const m2PerPackage = Number(
+    item.metadata?.m2_per_package ??
+    item.variant?.metadata?.m2_per_package ??
+    item.product?.metadata?.m2_per_package ??
+    (item as any).variant?.product?.metadata?.m2_per_package ??
+    0
+  )
+  const isFlooring = m2PerPackage > 0
+  const totalCoverage = isFlooring ? Number((item.quantity * m2PerPackage).toFixed(2)) : null
+  const unitPrice = item.unit_price || (item.total && item.quantity ? item.total / item.quantity : 0)
+  const pricePerM2 = isFlooring && unitPrice ? unitPrice / m2PerPackage : null
+
   return (
     <div className="flex items-center gap-4 py-3 border-b border-zinc-200 last:border-b-0">
       <Thumbnail
@@ -67,14 +78,30 @@ export const OrderLineItem = ({ item, order }: OrderLineItemProps) => {
         {item.variant_title && item.variant_title !== "Default Variant" && (
           <span className="text-sm text-zinc-600">{item.variant_title}</span>
         )}
-        <span className="text-sm text-zinc-600">{t('cart.quantity')}: {item.quantity}</span>
+        {isFlooring ? (
+          <div className="mt-0.5 space-y-0.5">
+            <span className="text-xs font-semibold text-golvfabriken-green block">
+              {item.quantity} paket ({totalCoverage} m² totalt)
+            </span>
+            <span className="text-[11px] text-zinc-500 block">
+              {m2PerPackage} m²/paket {pricePerM2 ? `• ${pricePerM2.toFixed(2)} kr/m²` : ""}
+            </span>
+          </div>
+        ) : (
+          <span className="text-sm text-zinc-600">{t('cart.quantity')}: {item.quantity}</span>
+        )}
       </div>
       <div className="text-right">
         <Price
           price={item.total}
           currencyCode={order.currency_code}
-          className="text-zinc-600"
+          className="text-zinc-900 font-semibold"
         />
+        {isFlooring && pricePerM2 && (
+          <span className="block text-xs text-zinc-500">
+            {pricePerM2.toFixed(2)} kr/m²
+          </span>
+        )}
       </div>
     </div>
   )

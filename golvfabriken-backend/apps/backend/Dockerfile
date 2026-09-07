@@ -30,19 +30,18 @@ RUN npx medusa build
 # ---------- 3. runtime ----------
 FROM node:20-alpine AS runtime
 RUN apk add --no-cache libc6-compat curl tini
+# Medusa v2's `medusa build` produces a self-contained deployable app under
+# .medusa/server (its own package.json + compiled medusa-config.js + src).
+# That directory — not the project root — is what must be run in production.
 WORKDIR /app
 
 ENV NODE_ENV=production \
     PORT=9000 \
     MEDUSA_WORKER_MODE=server
 
-COPY --from=build /workspace/apps/backend/package.json ./package.json
-COPY --from=build /workspace/apps/backend/medusa-config.* ./
-COPY --from=build /workspace/apps/backend/.medusa ./.medusa
+COPY --from=build /workspace/apps/backend/.medusa/server ./
 COPY --from=build /workspace/apps/backend/node_modules ./node_modules
-# Remove dev dependencies; legacy-peer-deps handles the React peer-dep conflict in
-# Medusa 2.14.x (icons wants React 19, dashboard wants React 18).
-RUN npm prune --omit=dev --legacy-peer-deps
+RUN npm install --omit=dev --legacy-peer-deps
 
 EXPOSE 9000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \

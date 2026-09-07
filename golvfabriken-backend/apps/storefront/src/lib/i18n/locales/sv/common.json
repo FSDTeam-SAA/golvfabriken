@@ -399,7 +399,11 @@
   "comparison": {
     "prefix": "Jmf",
     "label": "Jämförelsepris per m²",
-    "unit": "M2"
+    "unit": "M2",
+    "perPackage": "per paket",
+    "perPackageAbbr": "/ pkt",
+    "perM2": "/ m²",
+    "perUnit": "st"
   },
   "calculator": {
     "title": "Beräkna ditt behov",
@@ -407,7 +411,7 @@
     "modeDirect": "Ange yta direkt",
     "modeDimensions": "Ange längd och bredd",
     "directLabel": "Yta (m²)",
-    "directPlaceholder": "Ange m²",
+    "directPlaceholder": "Ange m² (t.ex. 100)",
     "directMissingMessage": "Ange önskad yta för att beräkna paketbehov",
     "lengthLabel": "Längd (m)",
     "lengthPlaceholder": "Ange längd",
@@ -415,13 +419,20 @@
     "widthPlaceholder": "Ange bredd",
     "dimensionsMissingMessage": "Ange längd och bredd för att beräkna paketbehov",
     "wasteLabel": "Spill att räkna med",
+    "waste0": "0% spill",
     "waste5": "5% spill",
-    "waste10": "10% spill",
-    "waste15": "15% spill",
-    "totalM2WithWaste": "Total m² med spill",
-    "packagesNeeded": "Paket som behövs",
+    "waste10": "10% spill (rekommenderas)",
+    "waste15": "15% spill (fiskben/sned)",
+    "totalM2WithWaste": "Total yta med spill",
+    "exactCalculated": "Exakt beräknat",
+    "packagesNeeded": "Hela paket som behövs",
+    "wholePackagesNote": "Avrundas uppåt till hela paket (paket kan ej delas)",
+    "actualCoverage": "Ger total golvyta på",
+    "packageSizeLabel": "Paketstorlek",
+    "estimatedPrice": "Pris för {{packages}} paket",
+    "packageStepperLabel": "Välj antal paket",
     "unit": "paket",
-    "helpText": "Räknat med {{wastePercentage}}% spill",
+    "helpText": "Räknat med {{wastePercentage}}% spill. Du beställer alltid hela paket.",
     "emptyMessage": "Ange önskat antal m² för att se paketbehov",
     "invalidMessage": "Ange ett positivt värde"
   }

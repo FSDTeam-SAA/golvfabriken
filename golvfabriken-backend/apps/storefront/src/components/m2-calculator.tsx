@@ -2,48 +2,31 @@ import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { getPackagesNeeded, PackagesNeededOutput } from "@/lib/utils/packages-needed"
 import { useFlooringCoverageQuote } from "@/lib/hooks/use-checkout"
+import { Minus, Plus, InformationCircleSolid } from "@medusajs/icons"
 
 interface M2CalculatorProps {
   m2PerPackage: number | null // From product/variant metadata
   defaultWastePercentage?: number | null
-  onQuantityChange: (qty: number) => void // Callback to update quantity field
+  quantity: number // Current whole package quantity
+  onQuantityChange: (qty: number, calcDetails?: PackagesNeededOutput | null) => void // Callback
   className?: string
 }
 
 type CalculatorMode = 'direct' | 'dimensions'
 
 const getValidWastePercentage = (value?: number | null) =>
-  value && [5, 10, 15].includes(value) ? value : 10
+  value !== undefined && value !== null && [0, 5, 10, 15].includes(value) ? value : 10
 
 /**
  * M² Calculator Component
  * 
- * Interactive calculator that helps customers determine how many packages they need
- * based on desired coverage area and waste percentage.
- * 
- * Features:
- * - Two input modes: direct area or length × width dimensions
- * - User selects waste percentage (5%, 10%, 15% - default 10%)
- * - Real-time calculation (no debounce needed)
- * - Automatically updates parent quantity field via callback
- * - Hides when m2PerPackage is missing or invalid
- * - Recalculates when m2PerPackage changes (variant switch)
- * 
- * @param m2PerPackage - Package size from product/variant metadata
- * @param onQuantityChange - Callback to update parent quantity field
- * @param className - Optional Tailwind classes
- * 
- * @example
- * ```tsx
- * <M2Calculator
- *   m2PerPackage={selectedVariant?.metadata?.m2_per_package}
- *   onQuantityChange={(qty) => setQuantity(qty)}
- * />
- * ```
+ * Interactive calculator for flooring products that determines the exact package requirement
+ * and enforces rounding up to the nearest whole package.
  */
 export function M2Calculator({
   m2PerPackage,
   defaultWastePercentage,
+  quantity,
   onQuantityChange,
   className = "",
 }: M2CalculatorProps) {
@@ -87,13 +70,11 @@ export function M2Calculator({
     })
 
     const useFallback = () => {
-      if (!active) {
-        return
-      }
+      if (!active) return
 
       setCalculation(fallbackResult)
       if (fallbackResult?.isValid && fallbackResult.packagesNeeded > 0) {
-        onQuantityChange(fallbackResult.packagesNeeded)
+        onQuantityChange(fallbackResult.packagesNeeded, fallbackResult)
       }
     }
 
@@ -108,22 +89,24 @@ export function M2Calculator({
         waste_pct: wastePercentage,
       })
       .then((response) => {
-        if (!active) {
-          return
-        }
+        if (!active) return
 
         const apiResult = response?.result
         if (apiResult?.is_valid) {
+          const exact = Number((apiResult.total_m2_with_waste / apiResult.m2_per_package).toFixed(2))
+          const totalCoverage = Number((apiResult.packages_needed * apiResult.m2_per_package).toFixed(2))
           const normalized: PackagesNeededOutput = {
             desiredM2: apiResult.desired_m2,
             wastePercentage: apiResult.waste_pct,
             totalM2WithWaste: apiResult.total_m2_with_waste,
+            exactPackages: exact,
             packagesNeeded: apiResult.packages_needed,
+            totalCoverageM2: totalCoverage,
             isValid: true,
           }
           setCalculation(normalized)
           if (normalized.packagesNeeded > 0) {
-            onQuantityChange(normalized.packagesNeeded)
+            onQuantityChange(normalized.packagesNeeded, normalized)
           }
           return
         }
@@ -143,15 +126,12 @@ export function M2Calculator({
     setWastePercentage(getValidWastePercentage(defaultWastePercentage))
   }, [defaultWastePercentage])
 
-  // Mode switch handler - reset other mode's fields
   const handleModeChange = (newMode: CalculatorMode) => {
     setMode(newMode)
     if (newMode === 'direct') {
-      // Switching to direct mode - clear dimensions
       setLength(null)
       setWidth(null)
     } else {
-      // Switching to dimensions mode - clear direct input
       setDirectM2(null)
     }
   }
@@ -194,85 +174,89 @@ export function M2Calculator({
 
   const handleWasteChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = parseInt(e.target.value)
-    if ([5, 10, 15].includes(value)) {
+    if ([0, 5, 10, 15].includes(value)) {
       setWastePercentage(value)
     }
   }
 
+  const handleManualQuantityChange = (newQty: number) => {
+    const wholeQty = Math.max(1, Math.floor(newQty))
+    onQuantityChange(wholeQty, calculation)
+  }
+
   // Hide calculator if m2PerPackage is missing or invalid
-  if (!isCalculatorEnabled) {
+  if (!isCalculatorEnabled || !m2PerPackage) {
     return null
   }
 
+  const totalCoverageWithCurrentQty = Number((quantity * m2PerPackage).toFixed(2))
+
   return (
-    <div className={`border border-golvfabriken-beige-300 rounded-lg p-4 bg-golvfabriken-beige-50 ${className}`}>
-      <h3 className="text-lg font-semibold text-golvfabriken-graphite mb-4">
-        {t("calculator.title")}
-      </h3>
+    <div className={`border border-golvfabriken-beige-300 rounded-xl p-4 md:p-5 bg-golvfabriken-beige-50 shadow-sm ${className}`}>
+      <div className="flex items-center justify-between gap-2 mb-3 pb-2 border-b border-golvfabriken-beige-200">
+        <div>
+          <h3 className="text-base md:text-lg font-bold text-golvfabriken-graphite flex items-center gap-1.5">
+            {t("calculator.title")}
+          </h3>
+          <p className="text-xs text-golvfabriken-graphite/70">
+            {t("calculator.packageSizeLabel")}: <span className="font-semibold text-golvfabriken-graphite">{m2PerPackage} m² / {t("calculator.unit")}</span>
+          </p>
+        </div>
+      </div>
 
       {/* Mode Toggle */}
       <fieldset className="mb-4">
         <legend className="sr-only">{t("calculator.modeLegend")}</legend>
-        <div className="flex gap-2 bg-white border border-golvfabriken-beige-300 rounded-md p-1">
-          <label
-            className={`flex-1 text-center px-4 py-2 rounded cursor-pointer transition-colors ${
+        <div className="grid grid-cols-2 gap-1.5 bg-white border border-golvfabriken-beige-300 rounded-lg p-1">
+          <button
+            type="button"
+            onClick={() => handleModeChange('direct')}
+            className={`text-center py-2 px-3 text-xs md:text-sm rounded-md font-medium transition-all ${
               mode === 'direct'
-                ? 'bg-golvfabriken-green text-white font-medium'
+                ? 'bg-golvfabriken-green text-white shadow-sm'
                 : 'text-golvfabriken-graphite hover:bg-golvfabriken-beige-100'
             }`}
           >
-            <input
-              type="radio"
-              name="calc-mode"
-              value="direct"
-              checked={mode === 'direct'}
-              onChange={() => handleModeChange('direct')}
-              className="sr-only"
-            />
             {t("calculator.modeDirect")}
-          </label>
-          <label
-            className={`flex-1 text-center px-4 py-2 rounded cursor-pointer transition-colors ${
+          </button>
+          <button
+            type="button"
+            onClick={() => handleModeChange('dimensions')}
+            className={`text-center py-2 px-3 text-xs md:text-sm rounded-md font-medium transition-all ${
               mode === 'dimensions'
-                ? 'bg-golvfabriken-green text-white font-medium'
+                ? 'bg-golvfabriken-green text-white shadow-sm'
                 : 'text-golvfabriken-graphite hover:bg-golvfabriken-beige-100'
             }`}
           >
-            <input
-              type="radio"
-              name="calc-mode"
-              value="dimensions"
-              checked={mode === 'dimensions'}
-              onChange={() => handleModeChange('dimensions')}
-              className="sr-only"
-            />
             {t("calculator.modeDimensions")}
-          </label>
+          </button>
         </div>
       </fieldset>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
         {/* Direct mode - single m² input */}
         {mode === 'direct' && (
           <div>
             <label
               htmlFor="direct-m2"
-              className="block text-sm font-medium text-golvfabriken-graphite mb-1"
+              className="block text-xs font-semibold uppercase tracking-wider text-golvfabriken-graphite/80 mb-1"
             >
               {t("calculator.directLabel")}
             </label>
-            <div className="flex items-center gap-2">
+            <div className="relative">
               <input
                 id="direct-m2"
                 type="number"
                 min="0.01"
-                step="0.01"
+                step="any"
                 placeholder={t("calculator.directPlaceholder")}
                 value={directM2 ?? ""}
                 onChange={handleDirectM2Change}
-                className="w-full px-3 py-2 border border-golvfabriken-beige-300 rounded-md focus:outline-none focus:ring-2 focus:ring-golvfabriken-green focus:border-transparent"
+                className="w-full pl-3 pr-10 py-2.5 bg-white border border-golvfabriken-beige-300 rounded-lg text-sm text-golvfabriken-graphite focus:outline-none focus:ring-2 focus:ring-golvfabriken-green focus:border-transparent font-medium"
               />
-              <span className="text-sm text-golvfabriken-graphite whitespace-nowrap">m²</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-golvfabriken-graphite/60">
+                m²
+              </span>
             </div>
           </div>
         )}
@@ -283,53 +267,57 @@ export function M2Calculator({
             <div>
               <label
                 htmlFor="length-input"
-                className="block text-sm font-medium text-golvfabriken-graphite mb-1"
+                className="block text-xs font-semibold uppercase tracking-wider text-golvfabriken-graphite/80 mb-1"
               >
                 {t("calculator.lengthLabel")}
               </label>
-              <div className="flex items-center gap-2">
+              <div className="relative">
                 <input
                   id="length-input"
                   type="number"
                   min="0.01"
-                  step="0.01"
+                  step="any"
                   placeholder={t("calculator.lengthPlaceholder")}
                   value={length ?? ""}
                   onChange={handleLengthChange}
-                  className="w-full px-3 py-2 border border-golvfabriken-beige-300 rounded-md focus:outline-none focus:ring-2 focus:ring-golvfabriken-green focus:border-transparent"
+                  className="w-full pl-3 pr-8 py-2.5 bg-white border border-golvfabriken-beige-300 rounded-lg text-sm text-golvfabriken-graphite focus:outline-none focus:ring-2 focus:ring-golvfabriken-green focus:border-transparent font-medium"
                 />
-                <span className="text-sm text-golvfabriken-graphite">m</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-golvfabriken-graphite/60">
+                  m
+                </span>
               </div>
             </div>
             <div>
               <label
                 htmlFor="width-input"
-                className="block text-sm font-medium text-golvfabriken-graphite mb-1"
+                className="block text-xs font-semibold uppercase tracking-wider text-golvfabriken-graphite/80 mb-1"
               >
                 {t("calculator.widthLabel")}
               </label>
-              <div className="flex items-center gap-2">
+              <div className="relative">
                 <input
                   id="width-input"
                   type="number"
                   min="0.01"
-                  step="0.01"
+                  step="any"
                   placeholder={t("calculator.widthPlaceholder")}
                   value={width ?? ""}
                   onChange={handleWidthChange}
-                  className="w-full px-3 py-2 border border-golvfabriken-beige-300 rounded-md focus:outline-none focus:ring-2 focus:ring-golvfabriken-green focus:border-transparent"
+                  className="w-full pl-3 pr-8 py-2.5 bg-white border border-golvfabriken-beige-300 rounded-lg text-sm text-golvfabriken-graphite focus:outline-none focus:ring-2 focus:ring-golvfabriken-green focus:border-transparent font-medium"
                 />
-                <span className="text-sm text-golvfabriken-graphite">m</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-golvfabriken-graphite/60">
+                  m
+                </span>
               </div>
             </div>
           </>
         )}
 
-        {/* Waste percentage dropdown - always visible */}
+        {/* Waste percentage dropdown */}
         <div className={mode === 'direct' ? '' : 'sm:col-span-2'}>
           <label
             htmlFor="waste-percentage"
-            className="block text-sm font-medium text-golvfabriken-graphite mb-1"
+            className="block text-xs font-semibold uppercase tracking-wider text-golvfabriken-graphite/80 mb-1"
           >
             {t("calculator.wasteLabel")}
           </label>
@@ -337,8 +325,9 @@ export function M2Calculator({
             id="waste-percentage"
             value={wastePercentage}
             onChange={handleWasteChange}
-            className="w-full px-3 py-2 border border-golvfabriken-beige-300 rounded-md focus:outline-none focus:ring-2 focus:ring-golvfabriken-green focus:border-transparent"
+            className="w-full px-3 py-2.5 bg-white border border-golvfabriken-beige-300 rounded-lg text-sm text-golvfabriken-graphite focus:outline-none focus:ring-2 focus:ring-golvfabriken-green focus:border-transparent font-medium"
           >
+            <option value={0}>{t("calculator.waste0")}</option>
             <option value={5}>{t("calculator.waste5")}</option>
             <option value={10}>{t("calculator.waste10")}</option>
             <option value={15}>{t("calculator.waste15")}</option>
@@ -346,46 +335,95 @@ export function M2Calculator({
         </div>
       </div>
 
-      {/* Calculation results */}
+      {/* Calculation breakdown */}
       {calculation?.isValid && (
-        <div className="bg-white border border-golvfabriken-beige-300 rounded-md p-4 space-y-2">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-golvfabriken-graphite/70">
-              {t("calculator.totalM2WithWaste")}:
-            </span>
-            <span className="font-medium text-golvfabriken-graphite">
-              {calculation.totalM2WithWaste.toFixed(2)} m²
-            </span>
+        <div className="bg-white border border-golvfabriken-beige-300 rounded-lg p-3.5 space-y-2.5 mb-4">
+          <div className="flex justify-between items-center text-xs text-golvfabriken-graphite/80">
+            <span>{t("calculator.directLabel")}:</span>
+            <span className="font-semibold text-golvfabriken-graphite">{calculation.desiredM2.toFixed(2)} m²</span>
           </div>
-          <div className="flex justify-between items-center pt-2 border-t border-golvfabriken-beige-200">
-            <span className="text-sm font-semibold text-golvfabriken-graphite">
-              {t("calculator.packagesNeeded")}:
-            </span>
-            <span className="text-lg font-bold text-golvfabriken-green">
-              {calculation.packagesNeeded} {t("calculator.unit")}
-            </span>
+
+          <div className="flex justify-between items-center text-xs text-golvfabriken-graphite/80">
+            <span>{t("calculator.totalM2WithWaste")} (+{calculation.wastePercentage}%):</span>
+            <span className="font-semibold text-golvfabriken-graphite">{calculation.totalM2WithWaste.toFixed(2)} m²</span>
           </div>
-          <p className="text-xs text-golvfabriken-graphite/60 pt-1">
-            {t("calculator.helpText", { wastePercentage: calculation.wastePercentage })}
-          </p>
+
+          {calculation.exactPackages !== calculation.packagesNeeded && (
+            <div className="flex justify-between items-center text-xs text-golvfabriken-graphite/70 pt-1 border-t border-golvfabriken-beige-200">
+              <span>{t("calculator.exactCalculated")}:</span>
+              <span className="font-mono text-zinc-600">{calculation.exactPackages} {t("calculator.unit")}</span>
+            </div>
+          )}
+
+          <div className="flex justify-between items-center pt-2 border-t border-golvfabriken-beige-300">
+            <div>
+              <span className="text-sm font-bold text-golvfabriken-graphite block">
+                {t("calculator.packagesNeeded")}:
+              </span>
+              <span className="text-[11px] text-golvfabriken-graphite/60 flex items-center gap-1 mt-0.5">
+                <InformationCircleSolid className="w-3.5 h-3.5 text-golvfabriken-green shrink-0" />
+                {t("calculator.wholePackagesNote")}
+              </span>
+            </div>
+            <div className="text-right">
+              <span className="text-xl font-extrabold text-golvfabriken-green">
+                {calculation.packagesNeeded} {t("calculator.unit")}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-golvfabriken-green/5 border border-golvfabriken-green/20 rounded-md p-2 text-xs text-golvfabriken-green font-medium flex justify-between items-center">
+            <span>{t("calculator.actualCoverage")}:</span>
+            <span className="font-bold">{calculation.totalCoverageM2.toFixed(2)} m²</span>
+          </div>
         </div>
       )}
 
-      {/* Empty state message - mode-specific */}
-      {!calculation?.isValid && desiredM2 === null && (
-        <p className="text-sm text-golvfabriken-graphite/60 text-center py-3">
-          {mode === 'direct' 
-            ? t("calculator.directMissingMessage") 
-            : t("calculator.dimensionsMissingMessage")}
-        </p>
-      )}
+      {/* Package Quantity Adjuster (always whole integer packages) */}
+      <div className="bg-white border border-golvfabriken-beige-300 rounded-lg p-3 flex items-center justify-between gap-4">
+        <div>
+          <span className="text-xs font-bold uppercase tracking-wider text-golvfabriken-graphite block">
+            {t("calculator.packageStepperLabel")}
+          </span>
+          <span className="text-xs text-golvfabriken-graphite/60">
+            {t("cart.coverage", { sqm: totalCoverageWithCurrentQty })}
+          </span>
+        </div>
 
-      {/* Invalid input message */}
-      {!calculation?.isValid && desiredM2 !== null && desiredM2 <= 0 && (
-        <p className="text-sm text-red-600 text-center py-3">
-          {t("calculator.invalidMessage")}
-        </p>
-      )}
+        <div className="flex items-center gap-1 bg-golvfabriken-beige-100 rounded-lg p-1 border border-golvfabriken-beige-300">
+          <button
+            type="button"
+            onClick={() => handleManualQuantityChange(quantity - 1)}
+            disabled={quantity <= 1}
+            className="w-8 h-8 rounded-md bg-white hover:bg-golvfabriken-beige-200 disabled:opacity-40 disabled:cursor-not-allowed text-golvfabriken-graphite flex items-center justify-center font-bold shadow-xs transition-colors"
+            aria-label="Decrease packages"
+          >
+            <Minus className="w-3.5 h-3.5" />
+          </button>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={quantity}
+            onChange={(e) => {
+              const val = parseInt(e.target.value)
+              if (!isNaN(val) && val > 0) {
+                handleManualQuantityChange(val)
+              }
+            }}
+            className="w-12 text-center text-sm font-bold bg-transparent text-golvfabriken-graphite focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => handleManualQuantityChange(quantity + 1)}
+            className="w-8 h-8 rounded-md bg-white hover:bg-golvfabriken-beige-200 text-golvfabriken-graphite flex items-center justify-center font-bold shadow-xs transition-colors"
+            aria-label="Increase packages"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
+

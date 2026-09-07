@@ -118,6 +118,49 @@ const positiveNumberOrNull = (value: number | null) => {
   return value && value > 0 ? value : null
 }
 
+const parsePackageSizeNumber = (
+  productMetadata: ProductMetadata,
+  variantMetadata: ProductMetadata
+): number | null => {
+  const directM2 = getMetadataNumber(
+    productMetadata,
+    variantMetadata,
+    PRODUCT_METADATA_KEYS.m2PerPackage
+  )
+  if (directM2 && directM2 > 0) return directM2
+
+  // Alternate keys: m2PerPackage, sqm_per_package, coverage_per_pack, m2_per_box
+  const altKeys = ["m2PerPackage", "sqm_per_package", "coverage_per_pack", "m2_per_box", "package_coverage_m2"]
+  for (const key of altKeys) {
+    const val = getMetadataNumber(productMetadata, variantMetadata, key)
+    if (val && val > 0) return val
+  }
+
+  // Check packageSize string e.g. "2.20 m²" or "2.20"
+  const pkgSizeStr = getMetadataString(
+    productMetadata,
+    variantMetadata,
+    PRODUCT_METADATA_KEYS.packageSize
+  )
+  if (pkgSizeStr) {
+    const match = pkgSizeStr.match(/(\d+(?:[.,]\d+)?)/)
+    if (match && match[1]) {
+      const parsed = parseFloat(match[1].replace(",", "."))
+      if (Number.isFinite(parsed) && parsed > 0) return parsed
+    }
+  }
+
+  return null
+}
+
+export const isFlooringItem = (
+  productMetadata?: ProductMetadata,
+  variantMetadata?: ProductMetadata
+): boolean => {
+  const m2PerPackage = parsePackageSizeNumber(productMetadata, variantMetadata)
+  return Boolean(m2PerPackage && m2PerPackage > 0)
+}
+
 export const getFlooringProductMetadata = (
   productMetadata?: ProductMetadata,
   variantMetadata?: ProductMetadata
@@ -128,11 +171,7 @@ export const getFlooringProductMetadata = (
       variantMetadata,
       PRODUCT_METADATA_KEYS.unit
     ) || "M2",
-    m2PerPackage: positiveNumberOrNull(getMetadataNumber(
-      productMetadata,
-      variantMetadata,
-      PRODUCT_METADATA_KEYS.m2PerPackage
-    )),
+    m2PerPackage: parsePackageSizeNumber(productMetadata, variantMetadata),
     wastePct: normalizeWastePct(getMetadataNumber(
       productMetadata,
       variantMetadata,

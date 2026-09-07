@@ -9,45 +9,25 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as StoreRouteImport } from './routes/store'
-import { Route as HealthRouteImport } from './routes/health'
-import { Route as CheckoutRouteImport } from './routes/checkout'
-import { Route as CartRouteImport } from './routes/cart'
-import { Route as CountryCodeRouteImport } from './routes/$countryCode'
-import { Route as SplatRouteImport } from './routes/$'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SplatRouteImport } from './routes/$'
+import { Route as CountryCodeRouteImport } from './routes/$countryCode'
+import { Route as CartRouteImport } from './routes/cart'
+import { Route as CheckoutRouteImport } from './routes/checkout'
+import { Route as HealthRouteImport } from './routes/health'
+import { Route as StoreRouteImport } from './routes/store'
 import { Route as CountryCodeIndexRouteImport } from './routes/$countryCode/index'
-import { Route as CountryCodeStoreRouteImport } from './routes/$countryCode/store'
-import { Route as CountryCodeOrderConfirmedRouteImport } from './routes/$countryCode/order-confirmed'
-import { Route as CountryCodeCheckoutRouteImport } from './routes/$countryCode/checkout'
 import { Route as CountryCodeCartRouteImport } from './routes/$countryCode/cart'
-import { Route as CountryCodeProductsHandleRouteImport } from './routes/$countryCode/products/$handle'
+import { Route as CountryCodeCheckoutRouteImport } from './routes/$countryCode/checkout'
+import { Route as CountryCodeOrderConfirmedRouteImport } from './routes/$countryCode/order-confirmed'
+import { Route as CountryCodeStoreRouteImport } from './routes/$countryCode/store'
 import { Route as CountryCodeCategoriesHandleRouteImport } from './routes/$countryCode/categories/$handle'
+import { Route as CountryCodeProductsHandleRouteImport } from './routes/$countryCode/products/$handle'
 import { Route as CountryCodeOrderOrderIdConfirmedRouteImport } from './routes/$countryCode/order/$orderId/confirmed'
 
-const StoreRoute = StoreRouteImport.update({
-  id: '/store',
-  path: '/store',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HealthRoute = HealthRouteImport.update({
-  id: '/health',
-  path: '/health',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CheckoutRoute = CheckoutRouteImport.update({
-  id: '/checkout',
-  path: '/checkout',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CartRoute = CartRouteImport.update({
-  id: '/cart',
-  path: '/cart',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CountryCodeRoute = CountryCodeRouteImport.update({
-  id: '/$countryCode',
-  path: '/$countryCode',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SplatRoute = SplatRouteImport.update({
@@ -55,9 +35,29 @@ const SplatRoute = SplatRouteImport.update({
   path: '/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const CountryCodeRoute = CountryCodeRouteImport.update({
+  id: '/$countryCode',
+  path: '/$countryCode',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CartRoute = CartRouteImport.update({
+  id: '/cart',
+  path: '/cart',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CheckoutRoute = CheckoutRouteImport.update({
+  id: '/checkout',
+  path: '/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HealthRoute = HealthRouteImport.update({
+  id: '/health',
+  path: '/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StoreRoute = StoreRouteImport.update({
+  id: '/store',
+  path: '/store',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CountryCodeIndexRoute = CountryCodeIndexRouteImport.update({
@@ -65,9 +65,14 @@ const CountryCodeIndexRoute = CountryCodeIndexRouteImport.update({
   path: '/',
   getParentRoute: () => CountryCodeRoute,
 } as any)
-const CountryCodeStoreRoute = CountryCodeStoreRouteImport.update({
-  id: '/store',
-  path: '/store',
+const CountryCodeCartRoute = CountryCodeCartRouteImport.update({
+  id: '/cart',
+  path: '/cart',
+  getParentRoute: () => CountryCodeRoute,
+} as any)
+const CountryCodeCheckoutRoute = CountryCodeCheckoutRouteImport.update({
+  id: '/checkout',
+  path: '/checkout',
   getParentRoute: () => CountryCodeRoute,
 } as any)
 const CountryCodeOrderConfirmedRoute =
@@ -76,26 +81,21 @@ const CountryCodeOrderConfirmedRoute =
     path: '/order-confirmed',
     getParentRoute: () => CountryCodeRoute,
   } as any)
-const CountryCodeCheckoutRoute = CountryCodeCheckoutRouteImport.update({
-  id: '/checkout',
-  path: '/checkout',
+const CountryCodeStoreRoute = CountryCodeStoreRouteImport.update({
+  id: '/store',
+  path: '/store',
   getParentRoute: () => CountryCodeRoute,
 } as any)
-const CountryCodeCartRoute = CountryCodeCartRouteImport.update({
-  id: '/cart',
-  path: '/cart',
-  getParentRoute: () => CountryCodeRoute,
-} as any)
-const CountryCodeProductsHandleRoute =
-  CountryCodeProductsHandleRouteImport.update({
-    id: '/products/$handle',
-    path: '/products/$handle',
-    getParentRoute: () => CountryCodeRoute,
-  } as any)
 const CountryCodeCategoriesHandleRoute =
   CountryCodeCategoriesHandleRouteImport.update({
     id: '/categories/$handle',
     path: '/categories/$handle',
+    getParentRoute: () => CountryCodeRoute,
+  } as any)
+const CountryCodeProductsHandleRoute =
+  CountryCodeProductsHandleRouteImport.update({
+    id: '/products/$handle',
+    path: '/products/$handle',
     getParentRoute: () => CountryCodeRoute,
   } as any)
 const CountryCodeOrderOrderIdConfirmedRoute =
@@ -221,39 +221,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/store': {
-      id: '/store'
-      path: '/store'
-      fullPath: '/store'
-      preLoaderRoute: typeof StoreRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/health': {
-      id: '/health'
-      path: '/health'
-      fullPath: '/health'
-      preLoaderRoute: typeof HealthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/checkout': {
-      id: '/checkout'
-      path: '/checkout'
-      fullPath: '/checkout'
-      preLoaderRoute: typeof CheckoutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cart': {
-      id: '/cart'
-      path: '/cart'
-      fullPath: '/cart'
-      preLoaderRoute: typeof CartRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/$countryCode': {
-      id: '/$countryCode'
-      path: '/$countryCode'
-      fullPath: '/$countryCode'
-      preLoaderRoute: typeof CountryCodeRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$': {
@@ -263,11 +235,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/$countryCode': {
+      id: '/$countryCode'
+      path: '/$countryCode'
+      fullPath: '/$countryCode'
+      preLoaderRoute: typeof CountryCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cart': {
+      id: '/cart'
+      path: '/cart'
+      fullPath: '/cart'
+      preLoaderRoute: typeof CartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checkout': {
+      id: '/checkout'
+      path: '/checkout'
+      fullPath: '/checkout'
+      preLoaderRoute: typeof CheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/health': {
+      id: '/health'
+      path: '/health'
+      fullPath: '/health'
+      preLoaderRoute: typeof HealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/store': {
+      id: '/store'
+      path: '/store'
+      fullPath: '/store'
+      preLoaderRoute: typeof StoreRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$countryCode/': {
@@ -277,18 +277,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CountryCodeIndexRouteImport
       parentRoute: typeof CountryCodeRoute
     }
-    '/$countryCode/store': {
-      id: '/$countryCode/store'
-      path: '/store'
-      fullPath: '/$countryCode/store'
-      preLoaderRoute: typeof CountryCodeStoreRouteImport
-      parentRoute: typeof CountryCodeRoute
-    }
-    '/$countryCode/order-confirmed': {
-      id: '/$countryCode/order-confirmed'
-      path: '/order-confirmed'
-      fullPath: '/$countryCode/order-confirmed'
-      preLoaderRoute: typeof CountryCodeOrderConfirmedRouteImport
+    '/$countryCode/cart': {
+      id: '/$countryCode/cart'
+      path: '/cart'
+      fullPath: '/$countryCode/cart'
+      preLoaderRoute: typeof CountryCodeCartRouteImport
       parentRoute: typeof CountryCodeRoute
     }
     '/$countryCode/checkout': {
@@ -298,18 +291,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CountryCodeCheckoutRouteImport
       parentRoute: typeof CountryCodeRoute
     }
-    '/$countryCode/cart': {
-      id: '/$countryCode/cart'
-      path: '/cart'
-      fullPath: '/$countryCode/cart'
-      preLoaderRoute: typeof CountryCodeCartRouteImport
+    '/$countryCode/order-confirmed': {
+      id: '/$countryCode/order-confirmed'
+      path: '/order-confirmed'
+      fullPath: '/$countryCode/order-confirmed'
+      preLoaderRoute: typeof CountryCodeOrderConfirmedRouteImport
       parentRoute: typeof CountryCodeRoute
     }
-    '/$countryCode/products/$handle': {
-      id: '/$countryCode/products/$handle'
-      path: '/products/$handle'
-      fullPath: '/$countryCode/products/$handle'
-      preLoaderRoute: typeof CountryCodeProductsHandleRouteImport
+    '/$countryCode/store': {
+      id: '/$countryCode/store'
+      path: '/store'
+      fullPath: '/$countryCode/store'
+      preLoaderRoute: typeof CountryCodeStoreRouteImport
       parentRoute: typeof CountryCodeRoute
     }
     '/$countryCode/categories/$handle': {
@@ -317,6 +310,13 @@ declare module '@tanstack/react-router' {
       path: '/categories/$handle'
       fullPath: '/$countryCode/categories/$handle'
       preLoaderRoute: typeof CountryCodeCategoriesHandleRouteImport
+      parentRoute: typeof CountryCodeRoute
+    }
+    '/$countryCode/products/$handle': {
+      id: '/$countryCode/products/$handle'
+      path: '/products/$handle'
+      fullPath: '/$countryCode/products/$handle'
+      preLoaderRoute: typeof CountryCodeProductsHandleRouteImport
       parentRoute: typeof CountryCodeRoute
     }
     '/$countryCode/order/$orderId/confirmed': {

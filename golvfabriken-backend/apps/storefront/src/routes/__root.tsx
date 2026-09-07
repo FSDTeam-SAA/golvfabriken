@@ -50,16 +50,18 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext()
 
   return (
-    <html lang="sv" suppressHydrationWarning>
+    <html lang="sv" suppressHydrationWarning className="notranslate" translate="no">
       <head>
         <HeadContent />
       </head>
-      <body suppressHydrationWarning>
-        <I18nextProvider i18n={i18n}>
-          <QueryClientProvider client={queryClient}>
-            <Layout />
-          </QueryClientProvider>
-        </I18nextProvider>
+      <body suppressHydrationWarning className="notranslate">
+        <div id="root">
+          <I18nextProvider i18n={i18n}>
+            <QueryClientProvider client={queryClient}>
+              <Layout />
+            </QueryClientProvider>
+          </I18nextProvider>
+        </div>
 
         <Scripts />
       </body>

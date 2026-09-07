@@ -107,3 +107,18 @@ npm run develop
 ```
 
 The admin panel runs at `http://localhost:1337/admin`. Create the first Strapi admin user there, then generate a full-access API token and paste it into `golvfabriken-backend/apps/backend/.env` as `STRAPI_API_TOKEN`.
+
+
+How to Create a Flooring Product (with M² Calculator)
+Click on Products in the left menu.
+Click the "+ Create" / "New Product" button (top right).
+Fill in the general details:
+Title: e.g. Bjelin Fiskbensparkett Ek
+Handle: e.g. bjelin-fiskbensparkett
+Price: Enter the price for one package (e.g. 649 SEK or 60 EUR).
+👉 The Key Step (Metadata):
+Scroll down to the Metadata section (or click Edit Metadata).
+Add a key:
+Key: m2_per_package
+Value: 1.85 (or whatever m² is in one package)
+Click Save / Publish.

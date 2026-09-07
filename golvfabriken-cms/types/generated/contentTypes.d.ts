@@ -374,7 +374,14 @@ export interface ApiProductEnrichmentProductEnrichment
   options: {
     draftAndPublish: true;
   };
+  pluginOptions: {
+    i18n: {
+      localized: true;
+    };
+  };
   attributes: {
+    canonical_url: Attribute.String;
+    commerce_title: Attribute.String;
     createdAt: Attribute.DateTime;
     createdBy: Attribute.Relation<
       'api::product-enrichment.product-enrichment',
@@ -382,10 +389,50 @@ export interface ApiProductEnrichmentProductEnrichment
       'admin::user'
     > &
       Attribute.Private;
+    focus_keyphrase: Attribute.String;
+    inventory_status: Attribute.Enumeration<
+      ['in_stock', 'low_stock', 'out_of_stock', 'backorder']
+    >;
+    last_error: Attribute.Text;
+    last_synced_at: Attribute.DateTime;
+    last_synced_by: Attribute.String;
+    locale: Attribute.String;
+    localizations: Attribute.Relation<
+      'api::product-enrichment.product-enrichment',
+      'oneToMany',
+      'api::product-enrichment.product-enrichment'
+    >;
     long_description: Attribute.RichText;
     media_gallery: Attribute.Media<'images', true>;
+    medusa_id: Attribute.String & Attribute.Unique;
+    og_image: Attribute.Media<'images'>;
+    price_display: Attribute.String;
+    product_visibility: Attribute.Enumeration<
+      ['public', 'b2b_only', 'private']
+    > &
+      Attribute.DefaultTo<'public'>;
     publishedAt: Attribute.DateTime;
+    robots: Attribute.Enumeration<
+      ['index_follow', 'index_nofollow', 'noindex_follow', 'noindex_nofollow']
+    > &
+      Attribute.DefaultTo<'index_follow'>;
+    seo_description: Attribute.Text &
+      Attribute.SetMinMaxLength<{
+        maxLength: 160;
+      }>;
+    seo_title: Attribute.String &
+      Attribute.SetMinMaxLength<{
+        maxLength: 60;
+      }>;
+    short_description: Attribute.Text;
+    sku: Attribute.String;
     slug: Attribute.UID & Attribute.Required;
+    sync_correlation_id: Attribute.String;
+    sync_origin: Attribute.Enumeration<['medusa', 'strapi', 'system']>;
+    sync_status: Attribute.Enumeration<
+      ['pending', 'synced', 'failed', 'conflict']
+    > &
+      Attribute.DefaultTo<'pending'>;
     updatedAt: Attribute.DateTime;
     updatedBy: Attribute.Relation<
       'api::product-enrichment.product-enrichment',
@@ -393,6 +440,7 @@ export interface ApiProductEnrichmentProductEnrichment
       'admin::user'
     > &
       Attribute.Private;
+    video_url: Attribute.String;
   };
 }
 

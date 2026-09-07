@@ -21,13 +21,13 @@ export const Route = createFileRoute("/$countryCode/")({
     }
 
     // Prefetch categories and products for homepage
-    queryClient.prefetchQuery({
+    await queryClient.ensureQueryData({
       queryKey: ["categories-list"],
       queryFn: () => listCategories(),
     })
 
-    queryClient.prefetchQuery({
-      queryKey: ["homepage-products"],
+    await queryClient.ensureQueryData({
+      queryKey: ["homepage-products", region.id],
       queryFn: () =>
         listProducts({
           query_params: {

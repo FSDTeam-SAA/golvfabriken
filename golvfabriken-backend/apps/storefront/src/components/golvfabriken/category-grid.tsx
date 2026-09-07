@@ -12,9 +12,10 @@ interface CategoryGridProps {
   categories: Category[];
   title: string;
   subtitle?: string;
+  countryCode?: string;
 }
 
-export function CategoryGrid({ categories, title, subtitle }: CategoryGridProps) {
+export function CategoryGrid({ categories, title, subtitle, countryCode = "se" }: CategoryGridProps) {
   return (
     <section className="py-16 md:py-24">
       <div className="content-container">
@@ -28,7 +29,7 @@ export function CategoryGrid({ categories, title, subtitle }: CategoryGridProps)
             <Link
               key={category.id}
               to="/$countryCode/categories/$handle"
-              params={{ countryCode: "se", handle: category.handle }}
+              params={{ countryCode, handle: category.handle }}
               className="group card-gf overflow-hidden"
             >
               <div className="aspect-[4/3] overflow-hidden bg-golvfabriken-beige-100">

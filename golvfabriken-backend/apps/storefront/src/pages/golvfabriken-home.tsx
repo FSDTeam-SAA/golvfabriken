@@ -1,5 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { sdk } from "@/lib/utils/sdk";
+import { useParams } from "@tanstack/react-router";
+import { listCategories } from "@/lib/data/categories";
+import { listProducts } from "@/lib/data/products";
+import { getRegion } from "@/lib/data/regions";
 import { HeroSection } from "@/components/golvfabriken/hero-section";
 import { TrustBar } from "@/components/golvfabriken/trust-bar";
 import { CategoryGrid } from "@/components/golvfabriken/category-grid";
@@ -8,47 +11,34 @@ import { B2BSection } from "@/components/golvfabriken/b2b-section";
 import { InfoSection } from "@/components/golvfabriken/info-section";
 
 export default function GolvfabrikenHome() {
-  const { data: regionsData } = useQuery({
-    queryKey: ["homepage-regions"],
-    queryFn: async () => {
-      const response = await sdk.store.region.list({
-        fields: "id,name,countries.iso_2",
-      });
-      return response;
-    },
+  const params = useParams({ strict: false });
+  const countryCode = (params as any)?.countryCode || "se";
+
+  const { data: region } = useQuery({
+    queryKey: ["region", countryCode],
+    queryFn: () => getRegion({ country_code: countryCode }),
   });
 
-  const regionId =
-    regionsData?.regions.find((region) =>
-      region.countries?.some((country) => country.iso_2 === "se")
-    )?.id || regionsData?.regions[0]?.id;
+  const regionId = region?.id;
 
-  // Fetch categories
+  // Fetch categories (SSR queryKey matched)
   const { data: categoriesData } = useQuery({
     queryKey: ["categories-list"],
-    queryFn: async () => {
-      const response = await sdk.store.category.list({
-        fields: "id,name,handle,description",
-      });
-      return response;
-    },
+    queryFn: () => listCategories(),
   });
 
-  // Fetch products for sliders
+  // Fetch products for sliders (SSR queryKey matched)
   const { data: productsData } = useQuery({
     queryKey: ["homepage-products", regionId],
-    queryFn: async () => {
-      if (!regionId) {
-        return { products: [] };
-      }
-
-      const response = await sdk.store.product.list({
-        fields: "id,title,handle,thumbnail,variants.calculated_price,metadata",
+    queryFn: () =>
+      listProducts({
+        query_params: {
+          limit: 12,
+          fields: "*variants, +variants.calculated_price, *metadata, +variants.metadata, *thumbnail"
+        },
         region_id: regionId,
-        limit: 12,
-      });
-      return response;
-    },
+      }),
+    enabled: Boolean(regionId),
   });
 
   const categories = categoriesData?.product_categories || [];
@@ -114,6 +104,7 @@ export default function GolvfabrikenHome() {
         title="Hitta ditt perfekta golv"
         subtitle="Vi har ett brett sortiment för alla rum och stilar"
         categories={displayCategories.filter(c => c.handle !== "tillbehor")}
+        countryCode={countryCode}
       />
 
       {products.length > 0 && (
@@ -123,6 +114,7 @@ export default function GolvfabrikenHome() {
           products={products.slice(0, 8) as any}
           viewAllLink="/$countryCode/store"
           viewAllText="Se alla produkter"
+          countryCode={countryCode}
         />
       )}
 
@@ -135,6 +127,7 @@ export default function GolvfabrikenHome() {
           products={products.slice(4, 12) as any}
           viewAllLink="/$countryCode/store"
           viewAllText="Se alla nyheter"
+          countryCode={countryCode}
         />
       )}
 

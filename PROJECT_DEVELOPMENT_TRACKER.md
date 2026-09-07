@@ -18,7 +18,7 @@ This file tracks what is already implemented, what is partial, and what still ne
 - Backend build status: `npm --prefix golvfabriken-backend/apps/backend run build` passed on 2026-05-30 after ownership edge-case handler coverage updates.
 - Database migration status: sync migration file exists, but it was not applied in this session because local Docker/Postgres/Redis were not running. Start local infra and run `npx medusa db:migrate` before testing persisted webhook writes against the database.
 - Important worktree note: the repository already has a large uncommitted storefront migration/change set. Avoid reverting unrelated existing changes.
-
+ 
 ## Progress Snapshot
 
 - Overall project progress estimate: **100% complete** (current accelerated implementation scope).

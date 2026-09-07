@@ -22,6 +22,7 @@ interface ProductSliderProps {
   subtitle?: string;
   viewAllLink?: string;
   viewAllText?: string;
+  countryCode?: string;
 }
 
 export function ProductSlider({
@@ -30,6 +31,7 @@ export function ProductSlider({
   subtitle,
   viewAllLink,
   viewAllText = "Se alla produkter",
+  countryCode = "se",
 }: ProductSliderProps) {
   return (
     <section className="py-16 md:py-24 bg-white">
@@ -54,12 +56,16 @@ export function ProductSlider({
           {products.slice(0, 8).map((product) => {
             const price = product.variants[0]?.calculated_price?.calculated_amount;
             const badge = product.metadata?.badge as string | undefined;
+            const m2PerPackage = (product.metadata as any)?.m2_per_package || 
+                                 (product.variants[0]?.metadata as any)?.m2_per_package;
+            const isFlooring = typeof m2PerPackage === "number" && m2PerPackage > 0;
+            const pricePerM2 = isFlooring && price ? price / m2PerPackage : null;
 
             return (
               <Link
                 key={product.id}
                 to="/$countryCode/products/$handle"
-                params={{ countryCode: "se", handle: product.handle }}
+                params={{ countryCode, handle: product.handle }}
                 className="group card-gf overflow-hidden"
               >
                 <div className="relative aspect-square overflow-hidden bg-golvfabriken-beige-100">
@@ -79,15 +85,27 @@ export function ProductSlider({
                     {product.title}
                   </h3>
                   {price !== undefined && (
-                    <p className="text-price-sm text-golvfabriken-green">
-                      {new Intl.NumberFormat("sv-SE", {
-                        style: "currency",
-                        currency: "SEK",
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      }).format(price)}{" "}
-                      <span className="text-body-sm font-normal text-golvfabriken-graphite/60">/ m²</span>
-                    </p>
+                    <div className="flex flex-col">
+                      <p className="text-price-sm text-golvfabriken-green font-semibold">
+                        {new Intl.NumberFormat("sv-SE", {
+                          style: "currency",
+                          currency: "SEK",
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0,
+                        }).format(price)}
+                        {isFlooring && (
+                          <span className="text-xs font-normal text-golvfabriken-graphite/60 ml-1">/ pkt</span>
+                        )}
+                      </p>
+                      {isFlooring && pricePerM2 && (
+                        <p className="text-xs font-medium text-golvfabriken-green/90">
+                          {new Intl.NumberFormat("sv-SE", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }).format(pricePerM2)} kr/m²
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               </Link>
