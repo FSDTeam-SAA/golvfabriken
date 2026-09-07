@@ -1,6 +1,7 @@
 import PaymentContainer from "@/components/payment-container"
 import StripeCardContainer from "@/components/stripe-card-container"
 import KustomCheckoutContainer from "@/components/kustom-checkout-container"
+import KlarnaPaymentContainer from "@/components/klarna-payment-container"
 import { Button } from "@/components/ui/button"
 import {
   useB2BCheckoutContext,
@@ -10,6 +11,7 @@ import {
 import { 
   isStripe as isStripeFunc, 
   isKustom as isKustomFunc, 
+  isKlarna as isKlarnaFunc,
   getActivePaymentSession, 
   isPaidWithGiftCard 
 } from "@/lib/utils/checkout"
@@ -165,6 +167,12 @@ const PaymentStep = ({ cart, onNext, onBack }: PaymentStepProps) => {
                     paymentSession={activeSession}
                     cart={cart}
                     onComplete={onNext}
+                  />
+                )}
+                {isKlarnaFunc(paymentMethod.id) && activeSession && selectedPaymentMethod === paymentMethod.id && (
+                  <KlarnaPaymentContainer
+                    paymentSession={activeSession}
+                    cart={cart}
                   />
                 )}
               </PaymentContainer>

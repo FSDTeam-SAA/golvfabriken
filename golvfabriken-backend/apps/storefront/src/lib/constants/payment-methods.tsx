@@ -18,5 +18,20 @@ export const paymentMethodsData: Record<
     title: "Kustom Checkout",
     icon: <CreditCard />,
   },
-  // Add more payment providers here
+  pp_klarna_klarna: {
+    title: "Klarna (Pay later, Slice it, Pay now)",
+    icon: (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-[#FFB3C7] text-black tracking-tight">
+        Klarna.
+      </span>
+    ),
+  },
+  pp_klarna: {
+    title: "Klarna",
+    icon: (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-[#FFB3C7] text-black tracking-tight">
+        Klarna.
+      </span>
+    ),
+  },
 }

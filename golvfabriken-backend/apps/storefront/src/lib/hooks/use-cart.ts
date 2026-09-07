@@ -14,7 +14,7 @@ import {
   createOptimisticCart,
 } from "@/lib/utils/cart"
 
-const DEFAULT_CART_FIELDS = "+items.total, +items.metadata, +items.product.metadata, +items.variant.metadata, shipping_methods.name"
+const DEFAULT_CART_FIELDS = "+items.total, +items.metadata, +items.product.metadata, +items.variant.metadata, *shipping_methods"
 
 export const useCart = ({ fields }: { fields?: string } = {}) => {
   return useQuery({

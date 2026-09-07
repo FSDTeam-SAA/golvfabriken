@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { useCompleteCartOrder } from "@/lib/hooks/use-checkout"
-import { isManual, isStripe } from "@/lib/utils/checkout"
+import { isKlarna, isManual, isStripe } from "@/lib/utils/checkout"
 import { getCountryCodeFromPath } from "@/lib/utils/region"
 import { HttpTypes } from "@medusajs/types"
 import { useLocation, useNavigate } from "@tanstack/react-router"
@@ -38,6 +38,17 @@ const PaymentButton = ({
   const paymentSession = cart.payment_collection?.payment_sessions?.[0]
 
   switch (true) {
+    case isKlarna(paymentSession?.provider_id):
+      return (
+        <KlarnaPaymentButton
+          cart={cart}
+          notReady={notReady}
+          className={className}
+          termsGateMissing={termsGateMissing}
+          forceDisabled={forceDisabled}
+          disabledMessage={disabledMessage}
+        />
+      )
     case isStripe(paymentSession?.provider_id):
       return (
         <StripePaymentButton
@@ -181,6 +192,103 @@ const ManualPaymentButton = ({
         className={className}
       >
         {t('checkout.placeOrder')}
+      </Button>
+      {termsGateMissing && (
+        <div className="text-zinc-600 text-sm mt-2">
+          Please accept the purchase terms before placing your order.
+        </div>
+      )}
+      {forceDisabled && disabledMessage && (
+        <div className="text-zinc-600 text-sm mt-2">
+          {disabledMessage}
+        </div>
+      )}
+      {errorMessage && (
+        <div className="text-red-500 text-sm mt-2">{errorMessage}</div>
+      )}
+    </>
+  )
+}
+
+const KlarnaPaymentButton = ({
+  cart,
+  notReady,
+  className,
+  termsGateMissing = false,
+  forceDisabled = false,
+  disabledMessage,
+}: {
+  cart: HttpTypes.StoreCart;
+  notReady: boolean;
+  className?: string;
+  termsGateMissing?: boolean;
+  forceDisabled?: boolean;
+  disabledMessage?: string;
+}) => {
+  const { t } = useTranslation()
+  const [submitting, setSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const navigate = useNavigate()
+  const location = useLocation()
+  const countryCode = getCountryCodeFromPath(location.pathname)
+  const completeOrderMutation = useCompleteCartOrder()
+
+  const handlePayment = async () => {
+    setSubmitting(true)
+    setErrorMessage(null)
+
+    const doCompleteOrder = async () => {
+      try {
+        const order = await completeOrderMutation.mutateAsync()
+        navigate({
+          to: `/${countryCode}/order/${order.id}/confirmed`,
+          replace: true,
+        })
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error ? error.message : t('checkout.failedToPlaceOrder')
+        )
+      } finally {
+        setSubmitting(false)
+      }
+    }
+
+    if (typeof window !== "undefined" && window.Klarna?.Payments?.authorize) {
+      try {
+        window.Klarna.Payments.authorize(
+          {
+            payment_method_category: "klarna",
+            auto_finalize: true,
+          },
+          {},
+          async (res) => {
+            if (res.approved) {
+              await doCompleteOrder()
+            } else if (res.error) {
+              setErrorMessage("Klarna authorization was not completed. Please try again.")
+              setSubmitting(false)
+            } else {
+              await doCompleteOrder()
+            }
+          }
+        )
+      } catch {
+        await doCompleteOrder()
+      }
+    } else {
+      await doCompleteOrder()
+    }
+  }
+
+  return (
+    <>
+      <Button
+        disabled={notReady || submitting}
+        onClick={handlePayment}
+        data-testid="place-order-button"
+        className={className}
+      >
+        {submitting ? "Behandlar betalning..." : "Betala med Klarna"}
       </Button>
       {termsGateMissing && (
         <div className="text-zinc-600 text-sm mt-2">
