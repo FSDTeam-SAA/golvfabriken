@@ -25,10 +25,11 @@ WORKDIR /workspace/apps/backend
 ENV STORE_CORS="http://localhost:8000" \
     ADMIN_CORS="http://localhost:9000" \
     AUTH_CORS="http://localhost:8000,http://localhost:9000"
-# MEDUSA_ADMIN_BACKEND_URL is embedded into the admin dashboard bundle at build time.
-# Pass the public API URL so the admin panel hits the correct server instead of localhost.
-ARG MEDUSA_ADMIN_BACKEND_URL=http://localhost:9000
-ENV MEDUSA_ADMIN_BACKEND_URL=${MEDUSA_ADMIN_BACKEND_URL}
+# MEDUSA_BACKEND_URL is read by medusa-config.ts at build time (admin.backendUrl).
+# Pass the public API URL so the admin dashboard bundle is compiled pointing to the
+# correct server instead of the localhost:9002 fallback.
+ARG MEDUSA_BACKEND_URL=http://localhost:9000
+ENV MEDUSA_BACKEND_URL=${MEDUSA_BACKEND_URL}
 RUN npx medusa build
 
 # ---------- 3. runtime ----------

@@ -61,7 +61,7 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.app }}-prod
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}-prod
           build-args: |
-            ${{ matrix.app == 'medusa' && 'MEDUSA_ADMIN_BACKEND_URL=https://api.golvfabriken.se' || '' }}
+            ${{ matrix.app == 'medusa' && 'MEDUSA_BACKEND_URL=https://api.golvfabriken.se' || '' }}
             ${{ matrix.app == 'storefront' && format('VITE_MEDUSA_BACKEND_URL={0}', secrets.PROD_VITE_MEDUSA_BACKEND_URL) || '' }}
             ${{ matrix.app == 'storefront' && format('VITE_MEDUSA_PUBLISHABLE_KEY={0}', secrets.PROD_VITE_MEDUSA_PUBLISHABLE_KEY) || '' }}
 
