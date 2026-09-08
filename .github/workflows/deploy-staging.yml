@@ -28,12 +28,17 @@ jobs:
           - app: medusa
             context: ./golvfabriken-backend
             dockerfile: ./golvfabriken-backend/apps/backend/Dockerfile
+            extra_build_args: "MEDUSA_ADMIN_BACKEND_URL=https://api-staging.golvfabriken.se"
           - app: storefront
             context: ./golvfabriken-backend/apps/storefront
             dockerfile: ./golvfabriken-backend/apps/storefront/Dockerfile
+            extra_build_args: |
+              VITE_MEDUSA_BACKEND_URL=${{ secrets.STAGING_VITE_MEDUSA_BACKEND_URL }}
+              VITE_MEDUSA_PUBLISHABLE_KEY=${{ secrets.STAGING_VITE_MEDUSA_PUBLISHABLE_KEY }}
           - app: strapi
             context: ./golvfabriken-cms
             dockerfile: ./golvfabriken-cms/Dockerfile
+            extra_build_args: ""
     steps:
       - uses: actions/checkout@v4
 
@@ -60,9 +65,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner }}/golvfabriken-${{ matrix.app }}:${{ env.TAG }}
           cache-from: type=gha,scope=${{ matrix.app }}-staging
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}-staging
-          build-args: |
-            VITE_MEDUSA_BACKEND_URL=${{ secrets.STAGING_VITE_MEDUSA_BACKEND_URL }}
-            VITE_MEDUSA_PUBLISHABLE_KEY=${{ secrets.STAGING_VITE_MEDUSA_PUBLISHABLE_KEY }}
+          build-args: ${{ matrix.extra_build_args }}
 
   deploy:
     name: Deploy to VPS

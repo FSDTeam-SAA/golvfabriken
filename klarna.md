@@ -14,7 +14,7 @@ Staging mode env:
 
 Service	Staging Live URL
 Storefront (Website)	https://staging.golvfabriken.se
-Medusa Backend API	https://api.staging.golvfabriken.se (Health check: https://api.staging.golvfabriken.se/health)
-Medusa Admin Panel	https://api.staging.golvfabriken.se/app
+Medusa Backend API	https://api-staging.golvfabriken.se (Health check: https://api-staging.golvfabriken.se/health)
+Medusa Admin Panel	https://api-staging.golvfabriken.se/app
 Strapi CMS Admin	https://cms.staging.golvfabriken.se/admin
 Media CDN (R2 Storage)	https://media-staging.golvfabriken.se
