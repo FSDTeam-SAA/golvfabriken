@@ -83,7 +83,8 @@ export function M2Calculator({
       return
     }
 
-    requestCoverage({
+    const timerId = setTimeout(() => {
+      requestCoverage({
         desired_m2: desiredM2,
         m2_per_package: m2PerPackage,
         waste_pct: wastePercentage,
@@ -116,9 +117,11 @@ export function M2Calculator({
       .catch(() => {
         useFallback()
       })
+    }, 250)
 
     return () => {
       active = false
+      clearTimeout(timerId)
     }
   }, [desiredM2, wastePercentage, m2PerPackage, onQuantityChange, isCalculatorEnabled, requestCoverage])
 

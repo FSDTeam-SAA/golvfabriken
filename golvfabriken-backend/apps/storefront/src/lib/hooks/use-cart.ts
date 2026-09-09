@@ -5,6 +5,7 @@ import { sdk } from "@/lib/utils/sdk"
 import {
   getStoredCart,
   setStoredCart,
+  removeStoredCart,
   addItemOptimistically,
   createOptimisticCartItem,
   getCurrentCart,
@@ -22,10 +23,16 @@ export const useCart = ({ fields }: { fields?: string } = {}) => {
     queryFn: async () => {
       const id = getStoredCart()
       if (!id) return null
-      const { cart } = await sdk.store.cart.retrieve(id, {
-        fields: fields || DEFAULT_CART_FIELDS,
-      })
-      return cart
+      try {
+        const { cart } = await sdk.store.cart.retrieve(id, {
+          fields: fields || DEFAULT_CART_FIELDS,
+        })
+        return cart
+      } catch (err) {
+        console.warn("Stored cart could not be retrieved, clearing stale cart ID...", err)
+        removeStoredCart()
+        return null
+      }
     },
     staleTime: 0
   })
@@ -88,25 +95,58 @@ export const useAddToCart = ({ fields }: { fields?: string } = {}) => {
 
       let cartId = getStoredCart()
 
-      if (!cartId) {
-        const { regions } = await sdk.store.region.list({})
-        const region = regions.find(r =>
-          r.countries?.some(c => c.iso_2 === country_code.toLowerCase())
-        )
-        if (!region) throw new Error(`Region not found for country code: ${country_code}`)
-        const { cart } = await sdk.store.cart.create({ region_id: region.id }, {
+      const createFreshCart = async () => {
+        let regionId = variables.region?.id
+        if (!regionId) {
+          const { regions } = await sdk.store.region.list({})
+          const region = regions.find(r =>
+            r.countries?.some(c => c.iso_2 === country_code.toLowerCase())
+          ) || regions[0]
+          if (!region) throw new Error(`Region not found for country code: ${country_code}`)
+          regionId = region.id
+        }
+        const { cart } = await sdk.store.cart.create({ region_id: regionId }, {
           fields: requestFields || fields || DEFAULT_CART_FIELDS,
         })
         setStoredCart(cart.id)
-        cartId = cart.id
+        return cart.id
       }
 
-      const response = await sdk.store.cart.createLineItem(
-        cartId,
-        { variant_id, quantity, metadata },
-        { fields: requestFields || fields || DEFAULT_CART_FIELDS }
-      )
-      return response.cart
+      if (!cartId) {
+        cartId = await createFreshCart()
+      }
+
+      try {
+        const response = await sdk.store.cart.createLineItem(
+          cartId,
+          { variant_id, quantity, metadata },
+          { fields: requestFields || fields || DEFAULT_CART_FIELDS }
+        )
+        return response.cart
+      } catch (err: any) {
+        const errorMessage = (err?.message || "").toLowerCase()
+        const isCartNotFound =
+          err?.status === 404 ||
+          (errorMessage.includes("cart") && (
+            errorMessage.includes("not found") ||
+            errorMessage.includes("does not exist") ||
+            errorMessage.includes("completed")
+          ))
+
+        if (isCartNotFound) {
+          console.warn("Cart expired or not found, recreating cart...", err)
+          removeStoredCart()
+          const newCartId = await createFreshCart()
+          const retryResponse = await sdk.store.cart.createLineItem(
+            newCartId,
+            { variant_id, quantity, metadata },
+            { fields: requestFields || fields || DEFAULT_CART_FIELDS }
+          )
+          return retryResponse.cart
+        }
+
+        throw err
+      }
     },
     onMutate: async (variables) => {
       await queryClient.cancelQueries({ predicate: queryKeys.cart.predicate })
@@ -122,7 +162,8 @@ export const useAddToCart = ({ fields }: { fields?: string } = {}) => {
         const optimisticItem = createOptimisticCartItem(
           variables.variant,
           variables.product,
-          variables.quantity
+          variables.quantity,
+          variables.metadata
         )
         addItemOptimistically(queryClient, optimisticItem, previousCart, fields)
       }

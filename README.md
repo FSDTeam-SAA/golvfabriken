@@ -122,3 +122,7 @@ Add a key:
 Key: m2_per_package
 Value: 1.85 (or whatever m² is in one package)
 Click Save / Publish.
+
+Default Credentials
+Email: admin@golvfabriken.se
+Password: Admin1234!

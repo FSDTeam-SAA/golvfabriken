@@ -42,13 +42,16 @@ export interface OptimisticCartItem {
   product?: {
     id: string;
     title: string;
+    metadata?: Record<string, unknown>;
   };
   variant?: {
     id: string;
     title: string;
+    metadata?: Record<string, unknown>;
   };
   unit_price: number;
   total: number;
+  metadata?: Record<string, unknown>;
   isOptimistic?: boolean;
 }
 
@@ -59,7 +62,8 @@ export interface OptimisticCart extends HttpTypes.StoreCart {
 export const createOptimisticCartItem = (
   variant: HttpTypes.StoreProductVariant,
   product: HttpTypes.StoreProduct,
-  quantity: number = 1
+  quantity: number = 1,
+  metadata?: Record<string, unknown>
 ): OptimisticCartItem => {
   const unitPrice = variant.calculated_price?.calculated_amount || 0
 
@@ -72,15 +76,18 @@ export const createOptimisticCartItem = (
     product: {
       id: product.id,
       title: product.title,
+      metadata: product.metadata,
     },
     product_title: product.title,
     variant: {
       id: variant.id,
       title: variant.title || "Default Variant",
+      metadata: variant.metadata,
     },
     variant_title: variant.title || "Default Variant",
     unit_price: unitPrice,
     total: unitPrice * quantity,
+    metadata: metadata || {},
     isOptimistic: true,
   }
 }
@@ -112,6 +119,7 @@ export const addItemOptimistically = (
       ...existingItem,
       quantity: existingItem.quantity + newItem.quantity,
       total: (existingItem.unit_price || 0) * (existingItem.quantity + newItem.quantity),
+      metadata: newItem.metadata || existingItem.metadata || {},
     }
   } else {
     const optimisticLineItem = {
@@ -132,7 +140,7 @@ export const addItemOptimistically = (
       total: newItem.total,
       created_at: new Date(),
       updated_at: new Date(),
-      metadata: {},
+      metadata: newItem.metadata || {},
       adjustments: [],
       tax_lines: [],
       unit_tax_amount: 0,

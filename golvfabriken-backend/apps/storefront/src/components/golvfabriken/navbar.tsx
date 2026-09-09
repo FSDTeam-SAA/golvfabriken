@@ -286,7 +286,7 @@ export function GolvfabrikenNavbar() {
 
             {/* Mobile hamburger menu */}
             <Drawer>
-              <DrawerTrigger className="lg:hidden text-gray-800 hover:text-golvfabriken-green">
+              <DrawerTrigger className="lg:hidden text-gray-800 hover:text-golvfabriken-green" aria-label="Öppna meny">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
@@ -302,12 +302,12 @@ export function GolvfabrikenNavbar() {
                   />
                 </svg>
               </DrawerTrigger>
-              <DrawerContent>
+              <DrawerContent hideClose>
                 <DrawerHeader className="flex items-center justify-between">
                   <DrawerTitle className="text-black text-xl font-bold">
                     Meny
                   </DrawerTitle>
-                  <DrawerClose>
+                  <DrawerClose className="text-gray-600 hover:text-gray-900 p-1.5 rounded-md hover:bg-gray-100 transition-colors focus:outline-none" aria-label="Stäng meny">
                     <XMark className="w-6 h-6" />
                   </DrawerClose>
                 </DrawerHeader>
