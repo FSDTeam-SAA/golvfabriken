@@ -3,12 +3,8 @@ node_modules/
 **/node_modules/
 
 # Environment files
-.env
-.env.*
 !.env.example
 !.env.template
-**/.env
-**/.env.*
 !**/.env.example
 !**/.env.template
 
@@ -41,3 +37,4 @@ pnpm-debug.log*
 implementation_plan.md
 walkthrough.md
 golvfabriken credentials
+config.bat

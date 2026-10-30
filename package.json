@@ -2,7 +2,7 @@
   "name": "golvfabriken",
   "private": true,
   "scripts": {
-    "start:infra": "docker compose up -d",
+    "start:infra": "node init && docker compose up -d",
     "stop:infra": "docker compose down",
     "logs:infra": "docker compose logs -f",
     "backend:dev": "npm --prefix golvfabriken-backend run backend:dev",
